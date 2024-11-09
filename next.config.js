@@ -5,6 +5,7 @@ const nextConfig = {
     domains: [
       'replicate.delivery',
       'img.clerk.com',
+      'ajxxlzcjckzwqglszsjm.supabase.co'
     ],
   },
   env: {

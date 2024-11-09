@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus } from "lucide-react"
+import { toast } from "sonner"
 
 interface PostCreationProps {
   communities: Array<{ id: number; name: string }>
@@ -32,8 +33,10 @@ export function PostCreation({ communities, onCreatePost }: PostCreationProps) {
       await onCreatePost(content, parseInt(communityId))
       setContent("")
       setCommunityId("")
+      toast.success('Post created successfully!')
     } catch (error) {
       console.error('Error in post creation:', error)
+      toast.error('Failed to create post')
     } finally {
       setIsSubmitting(false)
     }
@@ -49,6 +52,7 @@ export function PostCreation({ communities, onCreatePost }: PostCreationProps) {
           className="mb-4 min-h-[100px]"
           disabled={isSubmitting}
         />
+        
         <div className="flex justify-between items-center gap-4">
           <Select 
             value={communityId} 
@@ -66,6 +70,7 @@ export function PostCreation({ communities, onCreatePost }: PostCreationProps) {
               ))}
             </SelectContent>
           </Select>
+
           <Button 
             onClick={handleSubmit}
             disabled={!content.trim() || !communityId || isSubmitting}

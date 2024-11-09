@@ -29,6 +29,7 @@ interface PostCardProps {
     profiles?: {
       avatar_url: string
     }
+    image_url?: string
   }
   community: {
     name: string
@@ -126,6 +127,15 @@ export function PostCard({ post, community, isLiked, onLike }: PostCardProps) {
             </Badge>
           </div>
           <p className="text-sm">{post.content}</p>
+          {post.image_url && (
+            <div className="mt-2">
+              <img 
+                src={post.image_url} 
+                alt="Post attachment" 
+                className="rounded-lg max-h-96 object-cover"
+              />
+            </div>
+          )}
           <div className="flex gap-4">
             <Button 
               variant="ghost" 

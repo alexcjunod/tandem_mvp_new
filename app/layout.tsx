@@ -1,6 +1,7 @@
 import { ClerkProvider } from "@clerk/nextjs"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import { Toaster } from "sonner"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -16,6 +17,7 @@ export default function RootLayout({
           <main className="min-h-screen bg-background">
             {children}
           </main>
+          <Toaster />
         </body>
       </html>
     </ClerkProvider>

@@ -185,7 +185,7 @@ export default function CommunityPage() {
   }
 
   // Handle post creation with notifications
-  const handleCreatePost = async (content: string, communityId: number) => {
+  const handleCreatePost = async (content: string, communityId: number, imageUrl?: string) => {
     if (!user) {
       toast.error("Please sign in to create a post")
       return
@@ -200,7 +200,8 @@ export default function CommunityPage() {
           user_id: user.id,
           author_name: user.fullName || 'Anonymous',
           likes: 0,
-          comments: 0
+          comments: 0,
+          image_url: imageUrl
         })
         .select()
         .single()
