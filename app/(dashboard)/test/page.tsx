@@ -1,5 +1,5 @@
-import TestAuth from '../test-auth'
+import TestClerk from '../test-clerk'
 
 export default function TestPage() {
-  return <TestAuth />
+  return <TestClerk />
 } 
