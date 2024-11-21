@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Target, Calendar as CalendarIcon, BookOpen, Link } from 'lucide-react'
+import { Plus, Target, Calendar as CalendarIcon, BookOpen, Link, Trash2 } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -9,7 +9,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useRouter } from 'next/navigation'
-import { RadialBarChart, RadialBar, ResponsiveContainer, Cell } from "recharts"
+import { RadialBarChart, RadialBar, ResponsiveContainer, Cell, Tooltip, TooltipProps } from "recharts"
 import { format, isSameDay } from 'date-fns'
 import { toast } from 'sonner'
 import ReactConfetti from 'react-confetti'
@@ -30,38 +30,24 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { getGoals } from "@/lib/supabase/service"
 import { Goal, Task, Milestone } from '@/types'
-
-interface Task {
-  id: string
-  title: string
-  completed: boolean
-  date: string
-  goalId?: string
-  type: 'daily' | 'weekly' | 'custom'
-  tag?: string
-  user_id: string
-}
+import { useGoals } from '@/hooks/use-goals'
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart"
+import { LabelList } from "recharts"
 
 // Add this interface near the top with other interfaces
-interface Goal {
-  id: string
-  title: string
-  progress: number
-  color: string
-  tasks: Task[]
-  milestones: {
-    title: string
-    date: string
-    completed: boolean
-  }[]
-}
-
-// Add this interface with the other interfaces
 interface Reflection {
   id: string
   date: string
   content: string
-  goalId: string
+  goal_id: string
+  user_id: string
+  created_at?: string
 }
 
 // Add this interface with the other interfaces
@@ -69,7 +55,9 @@ interface Resource {
   id: string
   title: string
   url: string
-  goalId: string
+  goal_id: string
+  user_id: string
+  created_at?: string
 }
 
 // Initial mock data (we'll move this to Supabase later)
@@ -136,14 +124,14 @@ const initialGoals = [
 
 // Add initial reflections data after initialGoals
 const initialReflections: Reflection[] = [
-  { id: 'r1', date: "2024-03-14", content: "Feeling good about my progress in running. Need to focus more on stretching.", goalId: '1' },
-  { id: 'r2', date: "2024-03-13", content: "Learned a new chord progression today. Excited to incorporate it into a song.", goalId: '2' },
+  { id: 'r1', date: "2024-03-14", content: "Feeling good about my progress in running. Need to focus more on stretching.", goal_id: '1', user_id: 'user1' },
+  { id: 'r2', date: "2024-03-13", content: "Learned a new chord progression today. Excited to incorporate it into a song.", goal_id: '2', user_id: 'user1' },
 ]
 
 // Add initial resources data after initialReflections
 const initialResources: Resource[] = [
-  { id: 'res1', title: "Beginner's Guide to Marathon Training", url: "https://example.com/marathon-guide", goalId: '1' },
-  { id: 'res2', title: "Online Guitar Lessons", url: "https://example.com/guitar-lessons", goalId: '2' },
+  { id: 'res1', title: "Beginner's Guide to Marathon Training", url: "https://example.com/marathon-guide", goal_id: '1', user_id: 'user1' },
+  { id: 'res2', title: "Online Guitar Lessons", url: "https://example.com/guitar-lessons", goal_id: '2', user_id: 'user1' },
 ]
 
 // Custom hook for window size
@@ -180,7 +168,7 @@ interface TaskItemProps {
 }
 
 function TaskItem({ task, onToggle, goals }: TaskItemProps) {
-  const goal = task.goalId ? goals.find(g => g.id === task.goalId) : null;
+  const goal = task.goal_id ? goals.find(g => g.id === task.goal_id) : null;
   
   return (
     <div className="flex items-center justify-between w-full">
@@ -197,7 +185,7 @@ function TaskItem({ task, onToggle, goals }: TaskItemProps) {
           }`}
         >
           <span>{task.title}</span>
-          {task.goalId && goal && (
+          {task.goal_id && goal && (
             <Badge 
               variant="outline" 
               className="ml-2"
@@ -225,14 +213,57 @@ function TaskItem({ task, onToggle, goals }: TaskItemProps) {
   )
 }
 
+// Update calculateDailyProgress to include custom tasks
+const calculateDailyProgress = (tasks: Task[]) => {
+  const today = new Date();
+  const currentWeekday = today.getDay();
+
+  // Filter tasks for today
+  const todaysTasks = tasks.filter(task => 
+    task.type === 'daily' ||
+    (task.type === 'weekly' && task.weekday === currentWeekday) ||
+    (task.type === 'custom' && isSameDay(new Date(task.date), today))
+  );
+
+  if (todaysTasks.length === 0) return 0;
+  
+  const completedTasks = todaysTasks.filter(task => task.completed).length;
+  return Math.round((completedTasks / todaysTasks.length) * 100);
+};
+
+// Add this color scheme array
+const GOAL_COLORS = [
+  "hsl(10, 70%, 50%)",  // Red
+  "hsl(200, 70%, 50%)", // Blue
+  "hsl(150, 70%, 50%)", // Green
+  "hsl(280, 70%, 50%)", // Purple
+  "hsl(50, 70%, 50%)",  // Yellow
+  "hsl(320, 70%, 50%)", // Pink
+];
+
+// Add the chart config
+const chartConfig = {
+  progress: {
+    label: "Progress",
+  },
+  // This will be dynamically populated with goals
+} satisfies ChartConfig
+
 export default function Dashboard() {
   const router = useRouter()
   const { width, height } = useWindowSize()
+  const { 
+    goals, 
+    isLoading: goalsLoading, 
+    updateGoalTask, 
+    updateGoalMilestone,
+    refreshGoals,
+    addReflection,
+    addResource
+  } = useGoals()
   const [date, setDate] = useState<Date>(new Date())
   const [selectedGoalId, setSelectedGoalId] = useState<string>("all")
-  const [goals, setGoals] = useState<Goal[]>([])
   const [showConfetti, setShowConfetti] = useState(false)
-  const [customTasks, setCustomTasks] = useState<Task[]>([])
   const [newTaskTitle, setNewTaskTitle] = useState("")
   const [newTaskDate, setNewTaskDate] = useState<Date | undefined>(new Date())
   const [newTaskType, setNewTaskType] = useState<'daily' | 'weekly' | 'custom'>('daily')
@@ -246,7 +277,6 @@ export default function Dashboard() {
   const [newResourceUrl, setNewResourceUrl] = useState("")
   const [newResourceGoalId, setNewResourceGoalId] = useState("")
   const { user, isLoaded } = useUser()
-  const [isLoading, setIsLoading] = useState(true)
   const { getToken } = useAuth()
 
   // First, set up Supabase auth
@@ -269,131 +299,130 @@ export default function Dashboard() {
     setupSupabase()
   }, [user, isLoaded, getToken])
 
-  // Then fetch goals
-  useEffect(() => {
-    async function fetchGoals() {
-      if (!user || !isLoaded) return
-      
-      try {
-        setIsLoading(true)
-        console.log('Fetching goals for user:', user.id)
-        
-        // First get the token
-        const token = await getToken({ template: "supabase" })
-        if (!token) {
-          throw new Error('No auth token available')
-        }
-
-        // Then set up Supabase auth
-        const session = await updateSupabaseAuthToken(token)
-        if (!session) {
-          throw new Error('Failed to set up Supabase auth')
-        }
-
-        // Now fetch goals
-        const { data: goals, error } = await supabase
-          .from('goals')
-          .select(`
-            *,
-            tasks (*),
-            milestones (*)
-          `)
-          .eq('user_id', user.id)
-
-        console.log('Raw Supabase response:', { goals, error })
-
-        if (error) throw error
-
-        if (goals && goals.length > 0) {
-          setGoals(goals)
-        } else {
-          console.log('No goals found, using initial goals')
-          setGoals(initialGoals)
-        }
-      } catch (err) {
-        console.error('Error fetching goals:', err)
-        toast.error('Failed to load goals')
-        setGoals(initialGoals)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchGoals()
-  }, [user, isLoaded, getToken])
-
-  useEffect(() => {
-    if (user) {
-      console.log("Your Clerk User ID:", user.id)
-    }
-  }, [user])
-
   // Move all useMemo hooks together, before any conditional returns
   const currentGoal = useMemo(() => {
     if (selectedGoalId === "all") {
       return {
         id: "all",
+        user_id: user?.id || "",
         title: "All Goals",
+        description: "",
         progress: 0,
+        start_date: new Date().toISOString(),
+        end_date: new Date().toISOString(),
         color: "",
-        tasks: goals.flatMap(g => g.tasks),
-        milestones: goals.flatMap(g => g.milestones.map(m => ({
+        smart_goal: {
+          specific: "",
+          measurable: "",
+          achievable: "",
+          relevant: "",
+          timeBound: ""
+        },
+        reasoning: "",
+        tasks: goals.flatMap(g => g.tasks ?? []),
+        milestones: goals.flatMap(g => (g.milestones ?? []).map(m => ({
           ...m,
-          goalId: g.id,
           goalTitle: g.title,
           goalColor: g.color
         })))
-      }
+      } as Goal;
     }
-    return goals.find(g => g.id === selectedGoalId) || goals[0]
-  }, [selectedGoalId, goals])
+    
+    return goals.find(g => g.id === selectedGoalId) || goals[0] || {
+      id: "",
+      user_id: user?.id || "",
+      title: "",
+      description: "",
+      progress: 0,
+      start_date: new Date().toISOString(),
+      end_date: new Date().toISOString(),
+      color: "",
+      smart_goal: {
+        specific: "",
+        measurable: "",
+        achievable: "",
+        relevant: "",
+        timeBound: ""
+      },
+      reasoning: "",
+      tasks: [],
+      milestones: []
+    } as Goal;
+  }, [selectedGoalId, goals, user?.id]);
 
   const dailyTasks = useMemo(() => {
-    const goalTasks = currentGoal?.tasks.filter(task => task.type === 'daily') || [];
-    const customDailyTasks = customTasks.filter(task => 
-      task.type === 'daily' || 
-      (task.type === 'custom' && isSameDay(new Date(task.date), date))
-    );
-    return [...goalTasks, ...customDailyTasks];
-  }, [currentGoal, customTasks, date]);
+    const today = new Date()
+    const currentWeekday = today.getDay()
+
+    const allTasks = goals.flatMap(g => g.tasks ?? []);
+    const generalTasks = allTasks.filter(task => !task.goal_id); // Tasks without a goal
+    const goalTasks = allTasks.filter(task => task.goal_id); // Tasks with a goal
+
+    return [
+      // Goal-specific tasks for today
+      ...goalTasks.filter(task => 
+        task.type === 'daily' || 
+        (task.type === 'weekly' && task.weekday === currentWeekday)
+      ),
+      // General tasks for today
+      ...generalTasks.filter(task => 
+        task.type === 'daily' || 
+        (task.type === 'weekly' && task.weekday === currentWeekday) ||
+        (task.type === 'custom' && isSameDay(new Date(task.date), date))
+      )
+    ];
+  }, [goals, date]);
 
   const weeklyTasks = useMemo(() => {
-    const goalTasks = currentGoal?.tasks.filter(task => task.type === 'weekly') || [];
-    const customWeeklyTasks = customTasks.filter(task => task.type === 'weekly');
-    return [...goalTasks, ...customWeeklyTasks];
-  }, [currentGoal, customTasks]);
+    const allTasks = goals.flatMap(g => g.tasks ?? []);
+    return allTasks.filter(task => task.type === 'weekly');
+  }, [goals]);
 
   const customOnlyTasks = useMemo(() => {
-    return customTasks.filter(task => task.type === 'custom');
-  }, [customTasks]);
+    const allTasks = goals.flatMap(g => g.tasks ?? []);
+    return allTasks.filter(task => task.type === 'custom');
+  }, [goals]);
 
   // Add loading check after all hooks
-  if (isLoading) {
-    return <div>Loading dashboard...</div>
+  if (goalsLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="space-y-6">
+          <Skeleton className="h-12 w-[250px]" />
+          <div className="grid gap-6 md:grid-cols-2">
+            <Skeleton className="h-[400px]" />
+            <div className="space-y-6">
+              <Skeleton className="h-[200px]" />
+              <Skeleton className="h-[200px]" />
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // Handlers
   const handleTaskToggle = async (taskId: string) => {
     try {
-      // Check if it's a custom task
       const isCustomTask = customTasks.some(t => t.id === taskId);
       
       if (isCustomTask) {
-        setCustomTasks(prevTasks => 
-          prevTasks.map(t =>
-            t.id === taskId ? { ...t, completed: !t.completed } : t
-          )
+        const updatedCustomTasks = customTasks.map(t =>
+          t.id === taskId ? { ...t, completed: !t.completed } : t
         );
+        setCustomTasks(updatedCustomTasks);
+        localStorage.setItem('customTasks', JSON.stringify(updatedCustomTasks));
       } else {
-        // Handle goal tasks
-        setGoals(prevGoals => 
-          prevGoals.map(goal => ({
-            ...goal,
-            tasks: goal.tasks.map(t =>
-              t.id === taskId ? { ...t, completed: !t.completed } : t
-            )
-          }))
-        );
+        const task = goals.flatMap(g => g.tasks ?? []).find(t => t?.id === taskId);
+        if (!task) return;
+
+        const result = await updateGoalTask(taskId, { 
+          completed: !task.completed
+        });
+
+        if (result) {
+          toast.success('Task updated successfully');
+        }
       }
     } catch (error) {
       console.error('Error toggling task:', error);
@@ -401,93 +430,156 @@ export default function Dashboard() {
     }
   };
 
-  const handleMilestoneToggle = (index: number, goalId?: string) => {
-    if (selectedGoalId === "all" && !goalId) return;
+  const handleMilestoneToggle = async (milestoneId: string, goalId?: string) => {
+    try {
+      const goal = goals.find(g => g.id === (goalId || selectedGoalId));
+      if (!goal || !goal.milestones) {
+        console.error('Goal or milestones not found');
+        return;
+      }
 
-    setGoals(prevGoals =>
-      prevGoals.map(goal => {
-        // If we're in "all" view, only update the specific goal
-        if (goalId && goal.id !== goalId) return goal;
-        
-        // If we're in single goal view, only update if it matches current goal
-        if (!goalId && goal.id !== selectedGoalId) return goal;
+      const milestone = goal.milestones.find(m => m.id === milestoneId);
+      if (!milestone) {
+        console.error('Milestone not found:', milestoneId);
+        return;
+      }
 
-        return {
-          ...goal,
-          milestones: goal.milestones.map((milestone, i) => {
-            if (i === index) {
-              const newCompleted = !milestone.completed;
-              if (newCompleted) {
-                setShowConfetti(true);
-                setTimeout(() => setShowConfetti(false), 3000);
-              }
-              return { ...milestone, completed: newCompleted };
-            }
-            return milestone;
-          })
-        };
-      })
-    );
+      const result = await updateGoalMilestone(milestone.id, {
+        completed: !milestone.completed
+      });
+
+      if (result) {
+        if (!milestone.completed) {
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 3000);
+        }
+        toast.success('Milestone updated successfully');
+      }
+    } catch (error) {
+      console.error('Error toggling milestone:', error);
+      toast.error("Failed to update milestone");
+    }
   };
 
   const handleAddTask = async () => {
-    if (!user || !newTaskTitle) return
+    if (!newTaskTitle || !user) return
     
     try {
-      const newTask: Task = {
-        id: `task-${Date.now()}`,
+      const newTask: Omit<Task, 'id'> = {
         title: newTaskTitle,
         completed: false,
         date: newTaskDate?.toISOString() || new Date().toISOString(),
-        goalId: newTaskGoalId === "no-goal" ? undefined : newTaskGoalId,
+        goal_id: newTaskGoalId === "no-goal" ? null : newTaskGoalId, // Use null for custom tasks
         type: newTaskType,
+        weekday: newTaskType === 'weekly' ? newTaskWeekday : undefined,
         tag: newTaskTag || undefined,
+        user_id: user.id
+      }
+
+      // Store all tasks in Supabase, regardless of whether they're custom or goal-specific
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert([newTask])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      // Refresh goals to get updated tasks
+      await refreshGoals()
+      
+      setNewTaskTitle("")
+      setNewTaskType('daily')
+      setNewTaskDate(new Date())
+      setNewTaskGoalId("no-goal")
+      setNewTaskTag("")
+      toast.success('Task added successfully!')
+    } catch (error) {
+      console.error('Error adding task:', error)
+      toast.error('Failed to add task')
+    }
+  }
+
+  const handleAddReflection = async () => {
+    if (!newReflectionContent || !newReflectionGoalId || !user) return;
+    
+    try {
+      const newReflection: Omit<Reflection, 'id'> = {
+        content: newReflectionContent,
+        date: new Date().toISOString(),
+        goal_id: newReflectionGoalId,
         user_id: user.id
       };
 
-      setCustomTasks(prev => [...prev, newTask]);
-      setNewTaskTitle("");
-      setNewTaskType('daily');
-      setNewTaskDate(new Date());
-      setNewTaskGoalId("no-goal");
-      setNewTaskTag("");
-      toast.success('Task added successfully!');
+      const result = await addReflection(newReflection);
+      
+      if (result) {
+        setNewReflectionContent("");
+        setNewReflectionGoalId("");
+        toast.success('Reflection added successfully!');
+      }
     } catch (error) {
-      console.error('Error adding task:', error);
-      toast.error('Failed to add task');
+      console.error('Error adding reflection:', error);
+      toast.error('Failed to add reflection');
     }
   };
 
-  const handleAddReflection = () => {
-    if (newReflectionContent && newReflectionGoalId) {
-      const newReflection: Reflection = {
-        id: `reflection-${Date.now()}`,
-        date: format(new Date(), 'yyyy-MM-dd'),
-        content: newReflectionContent,
-        goalId: newReflectionGoalId
-      }
-      setReflections(prevReflections => [...prevReflections, newReflection])
-      setNewReflectionContent("")
-      setNewReflectionGoalId("")
-      toast.success('Reflection added successfully!')
-    }
-  }
-
-  const handleAddResource = () => {
-    if (newResourceTitle && newResourceUrl && newResourceGoalId) {
-      const newResource: Resource = {
-        id: `resource-${Date.now()}`,
+  const handleAddResource = async () => {
+    if (!newResourceTitle || !newResourceUrl || !newResourceGoalId || !user) return;
+    
+    try {
+      const newResource: Omit<Resource, 'id'> = {
         title: newResourceTitle,
         url: newResourceUrl,
-        goalId: newResourceGoalId
+        goal_id: newResourceGoalId,
+        user_id: user.id
+      };
+
+      const result = await addResource(newResource);
+      
+      if (result) {
+        setNewResourceTitle("");
+        setNewResourceUrl("");
+        setNewResourceGoalId("");
+        toast.success('Resource added successfully!');
       }
-      setResources(prevResources => [...prevResources, newResource])
-      setNewResourceTitle("")
-      setNewResourceUrl("")
-      setNewResourceGoalId("")
-      toast.success('Resource added successfully!')
+    } catch (error) {
+      console.error('Error adding resource:', error);
+      toast.error('Failed to add resource');
     }
-  }
+  };
+
+  const handleDeleteReflection = async (reflectionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('reflections')
+        .delete()
+        .eq('id', reflectionId);
+
+      if (error) throw error;
+      await refreshGoals();
+      toast.success('Reflection deleted successfully');
+    } catch (error) {
+      console.error('Error deleting reflection:', error);
+      toast.error('Failed to delete reflection');
+    }
+  };
+
+  const handleDeleteResource = async (resourceId: string) => {
+    try {
+      const { error } = await supabase
+        .from('resources')
+        .delete()
+        .eq('id', resourceId);
+
+      if (error) throw error;
+      await refreshGoals();
+      toast.success('Resource deleted successfully');
+    } catch (error) {
+      console.error('Error deleting resource:', error);
+      toast.error('Failed to delete resource');
+    }
+  };
 
   // ... rest of your handlers with Supabase integration
 
@@ -701,17 +793,18 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <ul className="space-y-4">
-                {(selectedGoalId === "all" ? currentGoal.milestones : currentGoal.milestones.map(m => ({
-                  ...m,
-                  goalId: currentGoal.id,
-                  goalTitle: currentGoal.title,
-                  goalColor: currentGoal.color
-                }))).map((milestone, index) => (
-                  <li key={index} className="flex items-center justify-between">
+                {(selectedGoalId === "all" 
+                  ? (currentGoal.milestones ?? [])
+                  : (currentGoal.milestones ?? [])
+                ).map((milestone) => (
+                  <li key={milestone.id} className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <Checkbox 
                         checked={milestone.completed}
-                        onCheckedChange={() => handleMilestoneToggle(index, selectedGoalId === "all" ? milestone.goalId : undefined)}
+                        onCheckedChange={() => handleMilestoneToggle(
+                          milestone.id, 
+                          selectedGoalId === "all" ? milestone.goal_id : undefined
+                        )}
                       />
                       <div className={`flex items-center space-x-2 ${
                         milestone.completed ? 'line-through text-muted-foreground' : ''
@@ -722,11 +815,11 @@ export default function Dashboard() {
                             variant="outline" 
                             className="ml-2"
                             style={{ 
-                              borderColor: milestone.goalColor,
-                              color: milestone.goalColor
+                              borderColor: milestone.goalColor || currentGoal.color,
+                              color: milestone.goalColor || currentGoal.color
                             }}
                           >
-                            {milestone.goalTitle}
+                            {milestone.goalTitle || currentGoal.title}
                           </Badge>
                         )}
                       </div>
@@ -748,21 +841,34 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <ul className="space-y-4">
-                {reflections
-                  .filter(r => selectedGoalId === "all" || r.goalId === selectedGoalId)
-                  .map(reflection => (
-                    <li key={reflection.id} className="border-b pb-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm text-muted-foreground">
-                          {format(new Date(reflection.date), 'MMMM d, yyyy')}
-                        </span>
-                        <Badge variant="outline">
-                          {goals.find(g => g.id === reflection.goalId)?.title}
-                        </Badge>
+                {(selectedGoalId === "all" 
+                  ? goals.flatMap(g => g.reflections ?? [])
+                  : goals.find(g => g.id === selectedGoalId)?.reflections ?? []
+                ).map(reflection => (
+                  <li key={reflection.id} className="border-b pb-4 group">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm text-muted-foreground">
+                        {format(new Date(reflection.date), 'MMMM d, yyyy')}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {reflection.goal_id && (
+                          <Badge variant="outline">
+                            {goals.find(g => g.id === reflection.goal_id)?.title || 'General'}
+                          </Badge>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleDeleteReflection(reflection.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                       </div>
-                      <p className="text-sm">{reflection.content}</p>
-                    </li>
-                  ))}
+                    </div>
+                    <p className="text-sm">{reflection.content}</p>
+                  </li>
+                ))}
               </ul>
             </CardContent>
             <CardFooter>
@@ -777,7 +883,7 @@ export default function Dashboard() {
                   <DialogHeader>
                     <DialogTitle>Add New Reflection</DialogTitle>
                     <DialogDescription>
-                      Write a reflection on your progress.
+                      Write a reflection on your progress
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
@@ -788,9 +894,10 @@ export default function Dashboard() {
                     />
                     <Select value={newReflectionGoalId} onValueChange={setNewReflectionGoalId}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a goal" />
+                        <SelectValue placeholder="Select a goal (optional)" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">General Reflection</SelectItem>
                         {goals.map(goal => (
                           <SelectItem key={goal.id} value={goal.id}>
                             {goal.title}
@@ -813,37 +920,86 @@ export default function Dashboard() {
           {/* Progress Overview Card */}
           <Card className="flex flex-col">
             <CardHeader className="items-center pb-0">
-              <CardTitle>Goal Progress</CardTitle>
-              <CardDescription>Overall progress across all goals</CardDescription>
+              <CardTitle>Daily Progress</CardTitle>
+              <CardDescription>Today's tasks completion</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 pb-0">
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadialBarChart
-                    innerRadius="30%"
-                    outerRadius="100%"
-                    data={goals}
-                    startAngle={90}
-                    endAngle={-270}
-                  >
-                    <RadialBar
-                      minAngle={15}
-                      background
-                      clockWise={true}
-                      dataKey="progress"
-                      cornerRadius={5}
-                      fill="#82ca9d"
-                    >
-                      {goals.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </RadialBar>
-                  </RadialBarChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartContainer
+                config={chartConfig}
+                className="mx-auto aspect-square max-h-[250px]"
+              >
+                <RadialBarChart
+                  data={[
+                    // Add general tasks (tasks without a goal)
+                    {
+                      name: "General Tasks",
+                      progress: calculateDailyProgress(goals.flatMap(g => g.tasks ?? []).filter(t => !t.goal_id)),
+                      fill: `hsl(var(--primary))`,
+                    },
+                    // Add goal-specific tasks
+                    ...goals.map((goal, index) => ({
+                      name: goal.title,
+                      progress: calculateDailyProgress(goal.tasks?.filter(t => t.goal_id === goal.id) || []),
+                      fill: goal.color || `hsl(var(--chart-${(index + 1) % 5}))`,
+                    }))
+                  ]}
+                  startAngle={-90}  // Start from top
+                  endAngle={270}   // Make a full circle
+                  innerRadius={60}
+                  outerRadius={100}
+                  barSize={10}
+                  maxAngle={360}
+                >
+                  <RadialBar
+                    background={{ fill: 'var(--muted)' }}
+                    dataKey="progress"
+                    cornerRadius={5}
+                    minAngle={0}    // Allow 0% progress
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      return (
+                        <div className="rounded-lg border bg-background p-2 shadow-sm">
+                          <div className="grid gap-2">
+                            {payload.map((entry, index) => (
+                              <div key={index} className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="h-2 w-2 rounded-full"
+                                    style={{ backgroundColor: entry.payload.fill }}
+                                  />
+                                  <span className="text-sm text-muted-foreground">
+                                    {entry.payload.name}
+                                  </span>
+                                </div>
+                                <span className="text-sm font-medium">
+                                  {entry.value}% complete
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }}
+                  />
+                </RadialBarChart>
+              </ChartContainer>
             </CardContent>
             <CardFooter className="flex-col gap-2 pt-4">
-              {goals.map((goal) => (
+              <div className="flex w-full items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="h-3 w-3 rounded-full"
+                    style={{ backgroundColor: `hsl(var(--primary))` }}
+                  />
+                  <span className="text-sm font-medium">General Tasks</span>
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {calculateDailyProgress(goals.flatMap(g => g.tasks ?? []).filter(t => !t.goal_id))}%
+                </span>
+              </div>
+              {goals.map((goal, index) => (
                 <div
                   key={goal.id}
                   className="flex w-full items-center justify-between"
@@ -851,12 +1007,14 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <div
                       className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: goal.color }}
+                      style={{ 
+                        backgroundColor: goal.color || `hsl(var(--chart-${(index + 1) % 5}))`
+                      }}
                     />
                     <span className="text-sm font-medium">{goal.title}</span>
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    {goal.progress}%
+                    {calculateDailyProgress(goal.tasks?.filter(t => t.goal_id === goal.id) || [])}%
                   </span>
                 </div>
               ))}
@@ -871,25 +1029,40 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {resources
-                  .filter(r => selectedGoalId === "all" || r.goalId === selectedGoalId)
-                  .map(resource => (
+                {(selectedGoalId === "all"
+                  ? goals.flatMap(g => g.resources ?? [])
+                  : goals.find(g => g.id === selectedGoalId)?.resources ?? []
+                ).map(resource => (
+                  <div
+                    key={resource.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border p-3 hover:bg-accent transition-colors group"
+                  >
                     <a
-                      key={resource.id}
                       href={resource.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2 rounded-lg border p-3 hover:bg-accent transition-colors"
+                      className="flex items-center gap-2 flex-1"
                     >
                       <Link className="h-4 w-4" />
                       <div className="flex flex-col gap-1">
                         <span className="text-sm font-medium">{resource.title}</span>
-                        <Badge variant="outline" className="w-fit">
-                          {goals.find(g => g.id === resource.goalId)?.title}
-                        </Badge>
+                        {resource.goal_id && (
+                          <Badge variant="outline" className="w-fit">
+                            {goals.find(g => g.id === resource.goal_id)?.title || 'General'}
+                          </Badge>
+                        )}
                       </div>
                     </a>
-                  ))}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleDeleteResource(resource.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
               </div>
             </CardContent>
             <CardFooter>
@@ -904,7 +1077,7 @@ export default function Dashboard() {
                   <DialogHeader>
                     <DialogTitle>Add New Resource</DialogTitle>
                     <DialogDescription>
-                      Add a helpful resource for your goal.
+                      Add a helpful resource
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
@@ -920,9 +1093,10 @@ export default function Dashboard() {
                     />
                     <Select value={newResourceGoalId} onValueChange={setNewResourceGoalId}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a goal" />
+                        <SelectValue placeholder="Select a goal (optional)" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">General Resource</SelectItem>
                         {goals.map(goal => (
                           <SelectItem key={goal.id} value={goal.id}>
                             {goal.title}

@@ -55,43 +55,52 @@ export interface Goal {
     timeBound: string
   }
   reasoning: string
-  tasks: Task[]
-  milestones: Milestone[]
+  tasks?: Task[]
+  milestones?: Milestone[]
+  reflections?: Reflection[]
+  resources?: Resource[]
   created_at?: string
   updated_at?: string
 }
 
 export interface Milestone {
   id: string
-  goal_id: string
   title: string
   date: string
   completed: boolean
+  goal_id: string
+  goalTitle?: string
+  goalColor?: string
 }
 
 export interface Task {
   id: string
-  user_id: string
-  goal_id: string
   title: string
-  type: 'daily' | 'weekly'
   completed: boolean
   date: string
+  goal_id?: string
+  type: 'daily' | 'weekly' | 'custom'
+  weekday?: 0 | 1 | 2 | 3 | 4 | 5 | 6
   tag?: string
+  user_id: string
 }
 
 export interface Reflection {
   id: string
   date: string
   content: string
-  goalId: string
+  goal_id: string
+  user_id: string
+  created_at?: string
 }
 
 export interface Resource {
   id: string
   title: string
   url: string
-  goalId: string
+  goal_id: string
+  user_id: string
+  created_at?: string
 }
 
 export interface SupabaseError {

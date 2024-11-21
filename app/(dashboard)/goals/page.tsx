@@ -1,12 +1,9 @@
 "use client"
 
-import { useState, useEffect } from 'react'
-import { useUser } from "@clerk/nextjs"
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { format } from 'date-fns'
+import { useGoals } from '@/hooks/use-goals'
 import { useRouter } from "next/navigation"
 import { Target, Plus, Calendar, ArrowRight, CheckCircle2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { format } from 'date-fns'
 
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -19,43 +16,22 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
+const calculateProgress = (goal: Goal) => {
+  if (!goal.milestones || goal.milestones.length === 0) return 0;
+  
+  const completedMilestones = goal.milestones.filter(m => m.completed).length;
+  const totalMilestones = goal.milestones.length;
+  
+  return Math.round((completedMilestones / totalMilestones) * 100);
+};
+
 export default function GoalsPage() {
-  const { user } = useUser()
+  const { goals, isLoading } = useGoals()
   const router = useRouter()
-  const [goals, setGoals] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const supabase = createClientComponentClient()
 
-  useEffect(() => {
-    async function fetchGoals() {
-      if (!user) return
-      
-      try {
-        setIsLoading(true)
-        const { data, error } = await supabase
-          .from('goals')
-          .select(`
-            *,
-            tasks (*),
-            milestones (*)
-          `)
-          .eq('user_id', user.id)
-
-        if (error) throw error
-
-        if (data) {
-          setGoals(data)
-        }
-      } catch (err) {
-        console.error('Error fetching goals:', err)
-        toast.error('Failed to load goals')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchGoals()
-  }, [user, supabase])
+  if (isLoading) {
+    return <div>Loading...</div>
+  }
 
   return (
     <div className="container mx-auto p-6">
@@ -67,7 +43,7 @@ export default function GoalsPage() {
           </h1>
           <p className="text-muted-foreground">Track and manage your personal goals</p>
         </div>
-        <Button>
+        <Button onClick={() => router.push('/onboarding')}>
           <Plus className="h-4 w-4 mr-2" />
           Add Goal
         </Button>
@@ -85,22 +61,36 @@ export default function GoalsPage() {
                 <div>
                   <div className="flex justify-between text-sm mb-2">
                     <span>Progress</span>
-                    <span>{goal.progress}%</span>
+                    <span>{calculateProgress(goal)}%</span>
                   </div>
-                  <Progress value={goal.progress} />
+                  <Progress value={calculateProgress(goal)} />
                 </div>
 
                 <div>
                   <h4 className="text-sm font-medium mb-2">Tasks</h4>
                   <div className="space-y-2">
-                    {goal.tasks?.slice(0, 3).map((task: any) => (
+                    {goal.tasks?.slice(0, 3).map((task) => (
                       <div key={task.id} className="flex items-center gap-2">
-                        <CheckCircle2 className={`h-4 w-4 ${task.completed ? 'text-green-500' : 'text-gray-300'}`} />
+                        <CheckCircle2 
+                          className={`h-4 w-4 ${task.completed ? 'text-green-500' : 'text-gray-300'}`}
+                        />
                         <span className={`text-sm ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                           {task.title}
                         </span>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Milestones</h4>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span>Completed</span>
+                      <span>
+                        {goal.milestones?.filter(m => m.completed).length || 0} / {goal.milestones?.length || 0}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
