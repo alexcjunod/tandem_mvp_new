@@ -197,15 +197,10 @@ function TaskItem({ task, onToggle, goals }: TaskItemProps) {
               {goal.title}
             </Badge>
           )}
-          {task.tag && (
+          {task.type === 'weekly' && task.weekday !== undefined && (
             <Badge variant="secondary" className="ml-2">
-              {task.tag}
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][task.weekday]}
             </Badge>
-          )}
-          {task.type === 'custom' && (
-            <span className="text-sm text-muted-foreground ml-2">
-              {format(new Date(task.date), 'MMM dd, yyyy')}
-            </span>
           )}
         </label>
       </div>
@@ -404,25 +399,25 @@ export default function Dashboard() {
   // Handlers
   const handleTaskToggle = async (taskId: string) => {
     try {
-      const isCustomTask = customTasks.some(t => t.id === taskId);
-      
-      if (isCustomTask) {
-        const updatedCustomTasks = customTasks.map(t =>
-          t.id === taskId ? { ...t, completed: !t.completed } : t
-        );
-        setCustomTasks(updatedCustomTasks);
-        localStorage.setItem('customTasks', JSON.stringify(updatedCustomTasks));
+      const task = goals.flatMap(g => g.tasks ?? []).find(t => t?.id === taskId);
+      if (!task) {
+        console.error('Task not found:', taskId);
+        return;
+      }
+
+      console.log('Found task:', task);
+      console.log('Current completion status:', task.completed);
+
+      const result = await updateGoalTask(taskId, { 
+        completed: !task.completed
+      });
+
+      if (result) {
+        console.log('Task updated successfully:', result);
+        await refreshGoals(); // Refresh to get latest state
+        toast.success('Task updated successfully');
       } else {
-        const task = goals.flatMap(g => g.tasks ?? []).find(t => t?.id === taskId);
-        if (!task) return;
-
-        const result = await updateGoalTask(taskId, { 
-          completed: !task.completed
-        });
-
-        if (result) {
-          toast.success('Task updated successfully');
-        }
+        throw new Error('Failed to update task');
       }
     } catch (error) {
       console.error('Error toggling task:', error);

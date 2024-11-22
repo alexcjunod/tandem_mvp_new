@@ -23,6 +23,7 @@
     "@radix-ui/react-tabs": "^1.1.1",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.46.1",
+    "chrono-node": "^2.7.7",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "date-fns": "^2.30.0",

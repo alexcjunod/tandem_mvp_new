@@ -1,39 +1,107 @@
 "use client"
 
-import * as React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { 
-  Cigarette, 
-  Plus, 
-  Target, 
-  Send, 
-  Sparkles, 
-  Timer  // Using Timer instead of Running as it's available in lucide-react
-} from "lucide-react"
+import { Cigarette, Timer, Plus, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import AIChat from "@/components/goals/ai-chat"
+import { useGoals } from "@/hooks/use-goals"
+import { toast } from "sonner"
+import type { GoalStructure } from "@/types/goals"
 
-const popularGoals = [
-  { id: "quit-smoking", title: "Stop Smoking", icon: Cigarette },
-  { id: "run-marathon", title: "Run a Marathon", icon: Timer }, // Changed to Timer
-  { id: "custom", title: "Create Custom Goal", icon: Plus },
+const predefinedGoals = [
+  { 
+    id: "quit-smoking", 
+    title: "Stop Smoking",
+    icon: Cigarette,
+    details: {
+      title: "Stop Smoking",
+      description: "Quit smoking completely and maintain a smoke-free lifestyle",
+      smart_goal: {
+        specific: "Stop smoking cigarettes completely",
+        measurable: "Track days without smoking and reduce cigarette count to zero",
+        achievable: "Use nicotine replacement therapy and support groups",
+        relevant: "Improve health and save money",
+        timeBound: "Quit completely within 3 months"
+      },
+      start_date: new Date().toISOString().split('T')[0],
+      end_date: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      color: "hsl(10, 70%, 50%)",
+      reasoning: "For better health and financial stability"
+    }
+  },
+  { 
+    id: "run-marathon", 
+    title: "Run a Marathon",
+    icon: Timer,
+    details: {
+      title: "Run a Marathon",
+      description: "Complete a full marathon (42.2km)",
+      smart_goal: {
+        specific: "Complete a full marathon race",
+        measurable: "Track training progress and finish time",
+        achievable: "Follow structured training plan",
+        relevant: "Improve fitness and achieve personal milestone",
+        timeBound: "Complete within 6 months"
+      },
+      start_date: new Date().toISOString().split('T')[0],
+      end_date: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      color: "hsl(200, 70%, 50%)",
+      reasoning: "To challenge myself and improve fitness"
+    }
+  },
+  { 
+    id: "custom", 
+    title: "Create Custom Goal",
+    icon: Plus
+  }
 ]
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const { createGoal } = useGoals()
   const [step, setStep] = useState(1)
   const [selectedGoal, setSelectedGoal] = useState<string | null>(null)
   const [customGoalStep, setCustomGoalStep] = useState(1)
+  const [motivation, setMotivation] = useState("")
 
-  const handleGoalSelect = (goalId: string) => {
+  const handleGoalSelect = async (goalId: string) => {
     setSelectedGoal(goalId)
     if (goalId === "custom") {
-      setStep(3)
-    } else {
       setStep(2)
+    } else {
+      setStep(3)
     }
+  }
+
+  const handlePredefinedGoalSubmit = async () => {
+    if (!selectedGoal || selectedGoal === "custom") return
+
+    const goalTemplate = predefinedGoals.find(g => g.id === selectedGoal)
+    if (!goalTemplate?.details) return
+
+    try {
+      const goal = await createGoal({
+        ...goalTemplate.details,
+        reasoning: motivation || goalTemplate.details.reasoning
+      })
+
+      if (goal) {
+        toast.success("Goal created successfully!")
+        setStep(4)
+      }
+    } catch (error) {
+      console.error('Error creating goal:', error)
+      toast.error("Failed to create goal")
+    }
+  }
+
+  const handleGoalCreated = (goal: GoalStructure) => {
+    toast.success("Goal created successfully!")
+    setStep(4)
   }
 
   return (
@@ -55,7 +123,7 @@ export default function OnboardingPage() {
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-center">Choose Your Goal</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {popularGoals.map((goal) => (
+              {predefinedGoals.map((goal) => (
                 <Card
                   key={goal.id}
                   className={`cursor-pointer transition-all ${
@@ -75,33 +143,42 @@ export default function OnboardingPage() {
 
         {step === 2 && (
           <div className="space-y-4">
-            <h2 className="text-2xl font-bold text-center">
-              {selectedGoal === "quit-smoking" ? "Stop Smoking" : "Run a Marathon"}
-            </h2>
-            <Card>
-              <CardContent className="pt-6">
-                {/* Pre-defined goal form */}
-              </CardContent>
-              <CardFooter>
-                <Button className="w-full" onClick={() => setStep(4)}>
-                  Set Goal
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="space-y-4">
             <h2 className="text-2xl font-bold text-center">Create Custom Goal</h2>
             <Card>
               <CardContent className="pt-6">
                 <AIChat 
-                  customGoalStep={customGoalStep}
-                  setCustomGoalStep={setCustomGoalStep}
-                  onGoalCreated={() => setStep(4)}
+                  onGoalCreated={handleGoalCreated}
                 />
               </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {step === 3 && selectedGoal !== 'custom' && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold text-center">
+              Why This Goal Matters
+            </h2>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  <Label htmlFor="motivation">What's your primary motivation?</Label>
+                  <Textarea
+                    id="motivation"
+                    placeholder="I want to achieve this goal because..."
+                    value={motivation}
+                    onChange={(e) => setMotivation(e.target.value)}
+                  />
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button 
+                  className="w-full" 
+                  onClick={handlePredefinedGoalSubmit}
+                >
+                  Set Goal
+                </Button>
+              </CardFooter>
             </Card>
           </div>
         )}
@@ -128,4 +205,4 @@ export default function OnboardingPage() {
       </div>
     </div>
   )
-} 
+}
