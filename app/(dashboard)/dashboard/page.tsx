@@ -197,9 +197,19 @@ function TaskItem({ task, onToggle, goals }: TaskItemProps) {
               {goal.title}
             </Badge>
           )}
+          {!task.goal_id && (
+            <Badge variant="secondary" className="ml-2">
+              General
+            </Badge>
+          )}
           {task.type === 'weekly' && task.weekday !== undefined && (
             <Badge variant="secondary" className="ml-2">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][task.weekday]}
+            </Badge>
+          )}
+          {task.type === 'custom' && task.date && (
+            <Badge variant="secondary" className="ml-2">
+              {format(new Date(task.date), 'MMM d, yyyy')}
             </Badge>
           )}
         </label>
@@ -208,22 +218,11 @@ function TaskItem({ task, onToggle, goals }: TaskItemProps) {
   )
 }
 
-// Update calculateDailyProgress to include custom tasks
+// Add this helper function to calculate daily progress
 const calculateDailyProgress = (tasks: Task[]) => {
-  const today = new Date();
-  const currentWeekday = today.getDay();
-
-  // Filter tasks for today
-  const todaysTasks = tasks.filter(task => 
-    task.type === 'daily' ||
-    (task.type === 'weekly' && task.weekday === currentWeekday) ||
-    (task.type === 'custom' && isSameDay(new Date(task.date), today))
-  );
-
-  if (todaysTasks.length === 0) return 0;
-  
-  const completedTasks = todaysTasks.filter(task => task.completed).length;
-  return Math.round((completedTasks / todaysTasks.length) * 100);
+  if (!tasks || tasks.length === 0) return 0;
+  const completedTasks = tasks.filter(t => t.completed).length;
+  return Math.round((completedTasks / tasks.length) * 100);
 };
 
 // Add this color scheme array
@@ -249,6 +248,7 @@ export default function Dashboard() {
   const { width, height } = useWindowSize()
   const { 
     goals, 
+    tasks,
     isLoading: goalsLoading, 
     updateGoalTask, 
     updateGoalMilestone,
@@ -266,13 +266,14 @@ export default function Dashboard() {
   const [newTaskTag, setNewTaskTag] = useState("")
   const [reflections, setReflections] = useState<Reflection[]>(initialReflections)
   const [newReflectionContent, setNewReflectionContent] = useState("")
-  const [newReflectionGoalId, setNewReflectionGoalId] = useState("")
+  const [newReflectionGoalId, setNewReflectionGoalId] = useState<string>("general")
   const [resources, setResources] = useState<Resource[]>(initialResources)
   const [newResourceTitle, setNewResourceTitle] = useState("")
   const [newResourceUrl, setNewResourceUrl] = useState("")
-  const [newResourceGoalId, setNewResourceGoalId] = useState("")
+  const [newResourceGoalId, setNewResourceGoalId] = useState<string>("general")
   const { user, isLoaded } = useUser()
   const { getToken } = useAuth()
+  const [newTaskWeekday, setNewTaskWeekday] = useState<number | undefined>(undefined)
 
   // First, set up Supabase auth
   useEffect(() => {
@@ -284,6 +285,8 @@ export default function Dashboard() {
         if (token) {
           await updateSupabaseAuthToken(token)
           console.log('Supabase auth token set')
+          await refreshGoals()
+          console.log('Goals refreshed after auth setup')
         }
       } catch (err) {
         console.error('Error setting up Supabase:', err)
@@ -346,37 +349,39 @@ export default function Dashboard() {
   }, [selectedGoalId, goals, user?.id]);
 
   const dailyTasks = useMemo(() => {
-    const today = new Date()
-    const currentWeekday = today.getDay()
-
-    const allTasks = goals.flatMap(g => g.tasks ?? []);
-    const generalTasks = allTasks.filter(task => !task.goal_id); // Tasks without a goal
-    const goalTasks = allTasks.filter(task => task.goal_id); // Tasks with a goal
-
-    return [
-      // Goal-specific tasks for today
-      ...goalTasks.filter(task => 
-        task.type === 'daily' || 
-        (task.type === 'weekly' && task.weekday === currentWeekday)
-      ),
-      // General tasks for today
-      ...generalTasks.filter(task => 
-        task.type === 'daily' || 
-        (task.type === 'weekly' && task.weekday === currentWeekday) ||
-        (task.type === 'custom' && isSameDay(new Date(task.date), date))
-      )
-    ];
-  }, [goals, date]);
+    return tasks
+      .filter(task => {
+        // Only show daily tasks and custom tasks for today
+        if (task.type === 'custom') {
+          return isSameDay(new Date(task.date), date);
+        }
+        
+        // Only show daily tasks
+        return task.type === 'daily';
+      })
+      .sort((a, b) => a.title.localeCompare(b.title)); // Optional: sort by title
+  }, [tasks, date]);
 
   const weeklyTasks = useMemo(() => {
-    const allTasks = goals.flatMap(g => g.tasks ?? []);
-    return allTasks.filter(task => task.type === 'weekly');
-  }, [goals]);
+    const today = new Date()
+    const currentWeekday = today.getDay()
+    
+    return tasks
+      .filter(task => 
+        // Only show weekly tasks for the current day
+        task.type === 'weekly' && task.weekday === currentWeekday
+      )
+      .sort((a, b) => {
+        if (a.weekday === undefined || b.weekday === undefined) return 0;
+        return a.weekday - b.weekday;
+      });
+  }, [tasks]);
 
   const customOnlyTasks = useMemo(() => {
-    const allTasks = goals.flatMap(g => g.tasks ?? []);
-    return allTasks.filter(task => task.type === 'custom');
-  }, [goals]);
+    return tasks
+      .filter(task => task.type === 'custom')
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [tasks]);
 
   // Add loading check after all hooks
   if (goalsLoading) {
@@ -399,25 +404,25 @@ export default function Dashboard() {
   // Handlers
   const handleTaskToggle = async (taskId: string) => {
     try {
-      const task = goals.flatMap(g => g.tasks ?? []).find(t => t?.id === taskId);
+      // Find the task in the tasks array
+      const task = tasks.find(t => t.id === taskId);
       if (!task) {
         console.error('Task not found:', taskId);
         return;
       }
 
-      console.log('Found task:', task);
-      console.log('Current completion status:', task.completed);
+      console.log('Tasks before toggle:', tasks);
+      console.log('Toggling task:', taskId);
 
+      // Update the task's completion status
       const result = await updateGoalTask(taskId, { 
         completed: !task.completed
       });
 
       if (result) {
-        console.log('Task updated successfully:', result);
-        await refreshGoals(); // Refresh to get latest state
+        // Refresh goals to get the updated task list
+        await refreshGoals();
         toast.success('Task updated successfully');
-      } else {
-        throw new Error('Failed to update task');
       }
     } catch (error) {
       console.error('Error toggling task:', error);
@@ -457,52 +462,50 @@ export default function Dashboard() {
   };
 
   const handleAddTask = async () => {
-    if (!newTaskTitle || !user) return
+    if (!newTaskTitle || !user) return;
     
     try {
-      const newTask: Omit<Task, 'id'> = {
+      const newTask = {
         title: newTaskTitle,
         completed: false,
-        date: newTaskDate?.toISOString() || new Date().toISOString(),
-        goal_id: newTaskGoalId === "no-goal" ? null : newTaskGoalId, // Use null for custom tasks
+        date: new Date().toISOString(),
+        goal_id: newTaskGoalId === "no-goal" ? null : newTaskGoalId, // Ensure null for general tasks
         type: newTaskType,
         weekday: newTaskType === 'weekly' ? newTaskWeekday : undefined,
-        tag: newTaskTag || undefined,
         user_id: user.id
-      }
+      };
 
-      // Store all tasks in Supabase, regardless of whether they're custom or goal-specific
       const { data, error } = await supabase
         .from('tasks')
         .insert([newTask])
         .select()
-        .single()
+        .single();
 
-      if (error) throw error
+      if (error) throw error;
 
-      // Refresh goals to get updated tasks
-      await refreshGoals()
+      await refreshGoals(); // Refresh to get the updated task list
+
+      // Reset all form fields
+      setNewTaskTitle("");
+      setNewTaskType('daily');
+      setNewTaskWeekday(undefined);
+      setNewTaskGoalId("no-goal");
       
-      setNewTaskTitle("")
-      setNewTaskType('daily')
-      setNewTaskDate(new Date())
-      setNewTaskGoalId("no-goal")
-      setNewTaskTag("")
-      toast.success('Task added successfully!')
+      toast.success('Task added successfully!');
     } catch (error) {
-      console.error('Error adding task:', error)
-      toast.error('Failed to add task')
+      console.error('Error adding task:', error);
+      toast.error('Failed to add task');
     }
-  }
+  };
 
   const handleAddReflection = async () => {
-    if (!newReflectionContent || !newReflectionGoalId || !user) return;
+    if (!newReflectionContent || !user) return;
     
     try {
       const newReflection: Omit<Reflection, 'id'> = {
         content: newReflectionContent,
         date: new Date().toISOString(),
-        goal_id: newReflectionGoalId,
+        goal_id: newReflectionGoalId === "general" ? null : newReflectionGoalId,
         user_id: user.id
       };
 
@@ -510,7 +513,7 @@ export default function Dashboard() {
       
       if (result) {
         setNewReflectionContent("");
-        setNewReflectionGoalId("");
+        setNewReflectionGoalId("general");
         toast.success('Reflection added successfully!');
       }
     } catch (error) {
@@ -520,13 +523,13 @@ export default function Dashboard() {
   };
 
   const handleAddResource = async () => {
-    if (!newResourceTitle || !newResourceUrl || !newResourceGoalId || !user) return;
+    if (!newResourceTitle || !newResourceUrl || !user) return;
     
     try {
       const newResource: Omit<Resource, 'id'> = {
         title: newResourceTitle,
         url: newResourceUrl,
-        goal_id: newResourceGoalId,
+        goal_id: newResourceGoalId === "general" ? null : newResourceGoalId,
         user_id: user.id
       };
 
@@ -535,7 +538,7 @@ export default function Dashboard() {
       if (result) {
         setNewResourceTitle("");
         setNewResourceUrl("");
-        setNewResourceGoalId("");
+        setNewResourceGoalId("general");
         toast.success('Resource added successfully!');
       }
     } catch (error) {
@@ -689,83 +692,90 @@ export default function Dashboard() {
                   <DialogHeader>
                     <DialogTitle>Add New Task</DialogTitle>
                     <DialogDescription>
-                      Create a new task for your goals or a standalone task.
+                      Create a new task for your goals
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Input
-                        id="task-title"
-                        placeholder="Task title"
-                        className="col-span-4"
-                        value={newTaskTitle}
-                        onChange={(e) => setNewTaskTitle(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Select value={newTaskGoalId} onValueChange={setNewTaskGoalId}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a goal (optional)" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="no-goal">No Goal</SelectItem>
-                          {goals.map(goal => (
-                            <SelectItem key={goal.id} value={goal.id}>
-                              {goal.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Select 
-                        value={newTaskType} 
-                        onValueChange={(value: 'daily' | 'weekly' | 'custom') => setNewTaskType(value)}
+                    <Input
+                      placeholder="Task title"
+                      value={newTaskTitle}
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                    />
+                    <Select
+                      value={newTaskType}
+                      onValueChange={(value: 'daily' | 'weekly' | 'custom') => {
+                        setNewTaskType(value)
+                        if (value === 'daily') setNewTaskWeekday(undefined)
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select task type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="custom">Custom</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {newTaskType === 'weekly' && (
+                      <Select
+                        value={newTaskWeekday?.toString()}
+                        onValueChange={(value) => setNewTaskWeekday(parseInt(value))}
                       >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select task type" />
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select day of week" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="daily">Daily</SelectItem>
-                          <SelectItem value="weekly">Weekly</SelectItem>
-                          <SelectItem value="custom">Custom Date</SelectItem>
+                          <SelectItem value="0">Sunday</SelectItem>
+                          <SelectItem value="1">Monday</SelectItem>
+                          <SelectItem value="2">Tuesday</SelectItem>
+                          <SelectItem value="3">Wednesday</SelectItem>
+                          <SelectItem value="4">Thursday</SelectItem>
+                          <SelectItem value="5">Friday</SelectItem>
+                          <SelectItem value="6">Saturday</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Input
-                        id="task-tag"
-                        placeholder="Add a tag (optional)"
-                        className="col-span-4"
-                        value={newTaskTag}
-                        onChange={(e) => setNewTaskTag(e.target.value)}
-                      />
-                    </div>
-                    {newTaskType === 'custom' && (
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant={"outline"}
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !newTaskDate && "text-muted-foreground"
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {newTaskDate ? format(newTaskDate, "PPP") : <span>Pick a date</span>}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={newTaskDate}
-                              onSelect={setNewTaskDate}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
                     )}
+
+                    {newTaskType === 'custom' && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !newTaskDate && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {newTaskDate ? format(newTaskDate, "PPP") : <span>Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={newTaskDate}
+                            onSelect={setNewTaskDate}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    )}
+
+                    <Select value={newTaskGoalId} onValueChange={setNewTaskGoalId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a goal (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="no-goal">No Goal</SelectItem>
+                        {goals.map(goal => (
+                          <SelectItem key={goal.id} value={goal.id}>
+                            {goal.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <DialogFooter>
                     <Button onClick={handleAddTask}>Add Task</Button>
@@ -892,7 +902,7 @@ export default function Dashboard() {
                         <SelectValue placeholder="Select a goal (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">General Reflection</SelectItem>
+                        <SelectItem value="general">General Reflection</SelectItem>
                         {goals.map(goal => (
                           <SelectItem key={goal.id} value={goal.id}>
                             {goal.title}
@@ -925,32 +935,42 @@ export default function Dashboard() {
               >
                 <RadialBarChart
                   data={[
-                    // Add general tasks (tasks without a goal)
                     {
                       name: "General Tasks",
-                      progress: calculateDailyProgress(goals.flatMap(g => g.tasks ?? []).filter(t => !t.goal_id)),
+                      progress: calculateDailyProgress(tasks.filter(t => !t.goal_id)),
                       fill: `hsl(var(--primary))`,
                     },
                     // Add goal-specific tasks
                     ...goals.map((goal, index) => ({
                       name: goal.title,
-                      progress: calculateDailyProgress(goal.tasks?.filter(t => t.goal_id === goal.id) || []),
+                      progress: calculateDailyProgress(tasks.filter(t => t.goal_id === goal.id)),
                       fill: goal.color || `hsl(var(--chart-${(index + 1) % 5}))`,
                     }))
                   ]}
-                  startAngle={-90}  // Start from top
-                  endAngle={270}   // Make a full circle
-                  innerRadius={60}
-                  outerRadius={100}
-                  barSize={10}
-                  maxAngle={360}
+                  startAngle={-90}    // Start at 12 o'clock
+                  endAngle={270}      // Make a full circle
+                  innerRadius={30}    // Smaller inner radius
+                  outerRadius={110}   // Larger outer radius
+                  barSize={20}        // Thicker bars
                 >
                   <RadialBar
                     background={{ fill: 'var(--muted)' }}
                     dataKey="progress"
-                    cornerRadius={5}
-                    minAngle={0}    // Allow 0% progress
-                  />
+                    cornerRadius={10}
+                    label={{
+                      position: 'insideStart',
+                      fill: '#fff',
+                      fontSize: 11,
+                      formatter: () => '' // Remove percentage display
+                    }}
+                  >
+                    <LabelList
+                      position="insideStart"
+                      dataKey="name" // Show only the name of the goal
+                      className="fill-white capitalize mix-blend-luminosity"
+                      fontSize={11}
+                    />
+                  </RadialBar>
                   <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
@@ -965,12 +985,9 @@ export default function Dashboard() {
                                     style={{ backgroundColor: entry.payload.fill }}
                                   />
                                   <span className="text-sm text-muted-foreground">
-                                    {entry.payload.name}
+                                    {entry.payload.name} {/* Only show the name of the goal */}
                                   </span>
                                 </div>
-                                <span className="text-sm font-medium">
-                                  {entry.value}% complete
-                                </span>
                               </div>
                             ))}
                           </div>
@@ -991,7 +1008,7 @@ export default function Dashboard() {
                   <span className="text-sm font-medium">General Tasks</span>
                 </div>
                 <span className="text-sm text-muted-foreground">
-                  {calculateDailyProgress(goals.flatMap(g => g.tasks ?? []).filter(t => !t.goal_id))}%
+                  {calculateDailyProgress(tasks.filter(t => !t.goal_id))}%
                 </span>
               </div>
               {goals.map((goal, index) => (
@@ -1009,7 +1026,7 @@ export default function Dashboard() {
                     <span className="text-sm font-medium">{goal.title}</span>
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    {calculateDailyProgress(goal.tasks?.filter(t => t.goal_id === goal.id) || [])}%
+                    {calculateDailyProgress(tasks.filter(t => t.goal_id === goal.id))}%
                   </span>
                 </div>
               ))}
@@ -1091,7 +1108,7 @@ export default function Dashboard() {
                         <SelectValue placeholder="Select a goal (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">General Resource</SelectItem>
+                        <SelectItem value="general">General Resource</SelectItem>
                         {goals.map(goal => (
                           <SelectItem key={goal.id} value={goal.id}>
                             {goal.title}

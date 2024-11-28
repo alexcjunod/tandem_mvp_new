@@ -10,7 +10,6 @@ const sidebarLinks = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/community", label: "Community", icon: Users },
-  { href: "/settings", label: "Settings", icon: Settings },
 ]
 
 export default function DashboardLayout({

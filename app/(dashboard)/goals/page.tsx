@@ -4,6 +4,7 @@ import { useGoals } from '@/hooks/use-goals'
 import { useRouter } from "next/navigation"
 import { Target, Plus, Calendar, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { format } from 'date-fns'
+import { useEffect } from 'react'
 
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -29,9 +30,17 @@ export default function GoalsPage() {
   const { goals, isLoading } = useGoals()
   const router = useRouter()
 
+  useEffect(() => {
+    console.log('Goals page mounted');
+    console.log('Current state:', { isLoading, goalsCount: goals.length, goals });
+  }, [isLoading, goals]);
+
   if (isLoading) {
+    console.log('Rendering loading state');
     return <div>Loading...</div>
   }
+
+  console.log('Rendering goals:', goals);
 
   return (
     <div className="container mx-auto p-6">

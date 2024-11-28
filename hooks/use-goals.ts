@@ -1,29 +1,32 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useUser } from "@clerk/nextjs"
 import { toast } from 'sonner'
 import { Goal, Task, Milestone, Reflection, Resource } from '@/types'
 
 export function useGoals() {
-  const [goals, setGoals] = useState<Goal[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const { user } = useUser()
+  const [goals, setGoals] = useState<Goal[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const supabase = createClientComponentClient()
 
   useEffect(() => {
+    console.log('useGoals hook initialized with user:', user);
     if (user) {
-      fetchGoals()
+      refreshGoals();
     }
-  }, [user])
+  }, [user]);
 
-  const fetchGoals = async () => {
-    if (!user) return
-    
+  const refreshGoals = useCallback(async () => {
+    if (!user) return;
+
     try {
-      setIsLoading(true)
-      console.log('Fetching goals for user:', user.id)
+      console.log('Fetching goals for user:', user.id);
+      setIsLoading(true);
       
-      const { data, error } = await supabase
+      // Fetch goals with all related data
+      const { data: goalsData, error: goalsError } = await supabase
         .from('goals')
         .select(`
           *,
@@ -32,24 +35,43 @@ export function useGoals() {
           reflections (*),
           resources (*)
         `)
-        .eq('user_id', user.id)
+        .eq('user_id', user.id);
 
-      console.log('Supabase response:', { data, error })
+      if (goalsError) throw goalsError;
 
-      if (error) throw error
+      console.log('Fetched goals data:', goalsData);
 
-      if (data) {
-        setGoals(data)
-        return data
-      }
-    } catch (err) {
-      console.error('Error fetching goals:', err)
-      toast.error('Failed to load goals')
-      return null
-    } finally {
-      setIsLoading(false)
+      // Fetch all tasks for the user
+      const { data: allTasks, error: tasksError } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (tasksError) throw tasksError;
+
+      console.log('Fetched tasks data:', allTasks);
+
+      // Combine goals with their associated tasks
+      const goalsWithTasks = goalsData.map(goal => ({
+        ...goal,
+        tasks: allTasks.filter(task => task.goal_id === goal.id)
+      }));
+
+      console.log('Setting goals with tasks:', goalsWithTasks);
+      
+      // Set goals with their associated tasks
+      setGoals(goalsWithTasks);
+      
+      // Set all tasks separately for the dashboard
+      setTasks(allTasks);
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error fetching goals and tasks:', error);
+      toast.error('Failed to load goals and tasks');
+      setIsLoading(false);
     }
-  }
+  }, [user, supabase]);
 
   const createGoal = async (goalData: Partial<Goal>) => {
     if (!user) return null
@@ -135,6 +157,7 @@ export function useGoals() {
 
       console.log('Task update response:', data);
 
+      // Update both goals and tasks arrays
       setGoals(prevGoals => 
         prevGoals.map(goal => ({
           ...goal,
@@ -142,6 +165,12 @@ export function useGoals() {
             task.id === taskId ? { ...task, ...updates } : task
           )
         }))
+      );
+
+      setTasks(prevTasks =>
+        prevTasks.map(task =>
+          task.id === taskId ? { ...task, ...updates } : task
+        )
       );
 
       return data;
@@ -232,7 +261,7 @@ export function useGoals() {
       }
 
       console.log('Reflection added:', data);
-      await fetchGoals(); // Refresh goals to get updated reflections
+      await refreshGoals(); // Refresh goals to get updated reflections
       return data;
     } catch (err) {
       console.error('Error adding reflection:', err);
@@ -252,7 +281,7 @@ export function useGoals() {
       if (error) throw error;
 
       console.log('Resource added:', data);
-      await fetchGoals(); // Refresh goals to get updated resources
+      await refreshGoals(); // Refresh goals to get updated resources
       return data;
     } catch (err) {
       console.error('Error adding resource:', err);
@@ -329,11 +358,12 @@ export function useGoals() {
 
   return {
     goals,
+    tasks,
     isLoading,
+    refreshGoals,
     createGoal,
     updateGoal,
     deleteGoal,
-    refreshGoals: fetchGoals,
     updateGoalTask,
     updateGoalMilestone,
     addReflection,

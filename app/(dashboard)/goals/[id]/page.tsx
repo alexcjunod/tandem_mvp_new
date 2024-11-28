@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 import { useGoals } from '@/hooks/use-goals'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import ReactConfetti from 'react-confetti'
+import { Skeleton } from "@/components/ui/skeleton"
 
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -90,51 +91,112 @@ export default function GoalDetailsPage() {
   const [showAllTasks, setShowAllTasks] = useState(false)
   const [showAllMilestones, setShowAllMilestones] = useState(false)
 
+  useEffect(() => {
+    console.log('Component mounted with:', {
+      user,
+      params,
+      goals,
+      isLoading
+    });
+  }, []);
+
   // Fetch specific goal data
-  const fetchGoalDetails = async () => {
-    if (!user || !params?.id) return
-    
-    try {
-      setIsLoading(true)
-      const { data, error } = await supabase
-        .from('goals')
-        .select(`
-          *,
-          tasks (*),
-          milestones (*),
-          reflections (*),
-          resources (*)
-        `)
-        .eq('id', params.id)
-        .single()
-
-      if (error) throw error
-
-      if (data) {
-        setCurrentGoal(data)
-        setEditedEndDate(data.end_date)
-        setEditedSmartGoal(data.smart_goal)
+  useEffect(() => {
+    const initializeGoal = async () => {
+      if (!user) {
+        console.log('No user yet, waiting...'); // Debug log
+        return;
       }
-    } catch (err) {
-      console.error('Error fetching goal:', err)
-      toast.error('Failed to load goal')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+      
+      if (!params?.id) {
+        console.log('No params.id yet, waiting...'); // Debug log
+        return;
+      }
+      
+      try {
+        console.log('Starting initialization with:', {
+          userId: user.id,
+          goalId: params.id,
+          goalsCount: goals.length
+        });
+        
+        setIsLoading(true);
+        
+        // First try to find the goal in the existing goals array
+        const existingGoal = goals.find(g => g.id === params.id);
+        
+        if (existingGoal) {
+          console.log('Found existing goal:', existingGoal);
+          setCurrentGoal(existingGoal);
+          setEditedEndDate(existingGoal.end_date);
+          setEditedSmartGoal(existingGoal.smart_goal);
+          setEditedDetails({
+            title: existingGoal.title,
+            description: existingGoal.description
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        console.log('Goal not found in existing goals, fetching from Supabase');
+
+        // If not found, fetch directly from Supabase
+        const { data: goalData, error: goalError } = await supabase
+          .from('goals')
+          .select(`
+            *,
+            tasks (*),
+            milestones (*),
+            reflections (*),
+            resources (*)
+          `)
+          .eq('id', params.id)
+          .single();
+
+        if (goalError) {
+          console.error('Supabase error:', goalError);
+          throw goalError;
+        }
+
+        if (goalData) {
+          console.log('Successfully fetched goal data:', goalData);
+          setCurrentGoal(goalData);
+          setEditedEndDate(goalData.end_date);
+          setEditedSmartGoal(goalData.smart_goal);
+          setEditedDetails({
+            title: goalData.title,
+            description: goalData.description
+          });
+        } else {
+          console.log('No goal data found');
+        }
+      } catch (err) {
+        console.error('Error in initialization:', err);
+        toast.error('Failed to load goal');
+      } finally {
+        console.log('Setting loading to false');
+        setIsLoading(false);
+      }
+    };
+
+    console.log('Effect dependencies changed:', {
+      hasUser: !!user,
+      paramsId: params?.id,
+      goalsCount: goals.length
+    });
+    
+    initializeGoal();
+  }, [user, params?.id, goals, supabase]);
 
   useEffect(() => {
-    fetchGoalDetails()
-  }, [user, params?.id])
-
-  useEffect(() => {
-    if (currentGoal) {
-      setEditedDetails({
-        title: currentGoal.title,
-        description: currentGoal.description
-      })
-    }
-  }, [currentGoal])
+    console.log('State changed:', {
+      isLoading,
+      hasCurrentGoal: !!currentGoal,
+      editedEndDate,
+      editedSmartGoal,
+      editedDetails
+    });
+  }, [isLoading, currentGoal, editedEndDate, editedSmartGoal, editedDetails]);
 
   const handleEndDateUpdate = async () => {
     try {
@@ -179,10 +241,7 @@ export default function GoalDetailsPage() {
 
       if (error) throw error
 
-      await Promise.all([
-        refreshGoals(),
-        fetchGoalDetails()
-      ])
+      await refreshGoals()
       
       setNewTaskTitle("")
       setNewTaskType('daily')
@@ -231,22 +290,18 @@ export default function GoalDetailsPage() {
         return;
       }
 
-      // Update the milestone in Supabase
       const result = await updateGoalMilestone(milestoneId, {
         completed: !milestone.completed
       });
 
       if (result) {
-        // Refresh both goals list and current goal data
-        await Promise.all([
-          refreshGoals(),
-          fetchGoalDetails()
-        ]);
+        await refreshGoals();
 
         if (!milestone.completed) {
           setShowConfetti(true);
           setTimeout(() => setShowConfetti(false), 3000);
         }
+        toast.success('Milestone updated successfully');
       }
     } catch (error) {
       console.error('Error toggling milestone:', error);
@@ -270,15 +325,18 @@ export default function GoalDetailsPage() {
 
   const handleDeleteTask = async (taskId: string) => {
     if (window.confirm('Are you sure you want to delete this task?')) {
-      const success = await deleteTask(taskId)
-      if (success) {
-        await Promise.all([
-          refreshGoals(),
-          fetchGoalDetails()
-        ])
+      try {
+        const success = await deleteTask(taskId);
+        if (success) {
+          await refreshGoals();
+          toast.success('Task deleted successfully');
+        }
+      } catch (error) {
+        console.error('Error deleting task:', error);
+        toast.error('Failed to delete task');
       }
     }
-  }
+  };
 
   const handleDeleteMilestone = async (milestoneId: string) => {
     if (window.confirm('Are you sure you want to delete this milestone?')) {
@@ -286,8 +344,69 @@ export default function GoalDetailsPage() {
     }
   };
 
-  if (isLoading || !currentGoal) {
-    return <div>Loading...</div>
+  const handleTaskToggle = async (taskId: string) => {
+    try {
+      const task = currentGoal.tasks?.find(t => t.id === taskId);
+      if (!task) {
+        console.error('Task not found:', taskId);
+        return;
+      }
+
+      const result = await updateGoalTask(taskId, { 
+        completed: !task.completed
+      });
+
+      if (result) {
+        // Just refresh goals, which will update currentGoal through the useEffect
+        await refreshGoals();
+        toast.success('Task updated successfully');
+      }
+    } catch (error) {
+      console.error('Error toggling task:', error);
+      toast.error("Failed to update task");
+    }
+  };
+
+  if (isLoading) {
+    console.log('Rendering loading state with:', {
+      user,
+      params,
+      goalsCount: goals.length
+    });
+    
+    return (
+      <div className="container mx-auto p-6">
+        <div className="space-y-6">
+          <Skeleton className="h-12 w-[250px]" />
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="md:col-span-2 space-y-6">
+              <Skeleton className="h-[200px]" />
+              <Skeleton className="h-[300px]" />
+            </div>
+            <Skeleton className="h-[500px]" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentGoal) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold">Goal not found</h2>
+          <p className="text-muted-foreground mt-2">The goal you're looking for doesn't exist.</p>
+          <Button
+            variant="ghost"
+            className="mt-4"
+            onClick={() => router.push('/goals')}
+          >
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            Back to Goals
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
