@@ -1,6 +1,6 @@
 "use client"
 
-import { ComponentProps } from "react"
+import { ComponentProps, ReactElement } from "react"
 import { ResponsiveContainer, Tooltip, TooltipProps } from "recharts"
 import {
   NameType,
@@ -16,6 +16,7 @@ export type ChartConfig = {
 
 interface ChartProps extends ComponentProps<"div"> {
   config: ChartConfig
+  children: ReactElement
 }
 
 export function ChartContainer({
@@ -74,4 +75,4 @@ export function CustomTooltip<TData extends ValueType, TName extends NameType>({
   )
 }
 
-export { ChartTooltipContent } from "recharts"
+export { DefaultTooltipContent as ChartTooltipContent } from "recharts"

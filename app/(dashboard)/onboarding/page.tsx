@@ -162,10 +162,10 @@ export default function OnboardingPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="space-y-4">
-                  <Label htmlFor="motivation">What's your primary motivation?</Label>
+                  <Label htmlFor="motivation">What&apos;s your primary motivation?</Label>
                   <Textarea
                     id="motivation"
-                    placeholder="I want to achieve this goal because..."
+                    placeholder="I want to achieve this goal because&apos;..."
                     value={motivation}
                     onChange={(e) => setMotivation(e.target.value)}
                   />

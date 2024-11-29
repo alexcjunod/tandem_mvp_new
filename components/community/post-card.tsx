@@ -10,6 +10,7 @@ import { Heart, MessageCircle } from "lucide-react"
 import { useUser } from "@clerk/nextjs"
 import { supabase } from "@/lib/supabase/client"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import Image from 'next/image'
 
 interface Comment {
   id: number
@@ -129,10 +130,12 @@ export function PostCard({ post, community, isLiked, onLike }: PostCardProps) {
           <p className="text-sm">{post.content}</p>
           {post.image_url && (
             <div className="mt-2">
-              <img 
+              <Image 
                 src={post.image_url} 
                 alt="Post attachment" 
-                className="rounded-lg max-h-96 object-cover"
+                width={800}
+                height={600}
+                className="rounded-lg object-cover"
               />
             </div>
           )}

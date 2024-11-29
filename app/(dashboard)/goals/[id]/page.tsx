@@ -227,8 +227,10 @@ export default function GoalDetailsPage() {
   }, [newTaskTitle, user, currentGoal, newTaskType, newTaskWeekday, supabase, refreshGoals]);
 
   const handleEndDateUpdate = async () => {
+    if (!currentGoal) return;
+    
     try {
-      await updateGoal(currentGoal!.id, { end_date: editedEndDate })
+      await updateGoal(currentGoal.id, { end_date: editedEndDate })
       setIsEditingDate(false)
     } catch (error) {
       console.error('Error updating end date:', error)
@@ -237,8 +239,10 @@ export default function GoalDetailsPage() {
   }
 
   const handleSmartGoalUpdate = async () => {
+    if (!currentGoal) return;
+    
     try {
-      await updateGoal(currentGoal!.id, { smart_goal: editedSmartGoal })
+      await updateGoal(currentGoal.id, { smart_goal: editedSmartGoal })
       setIsEditingSmart(false)
       toast.success('SMART goal updated')
     } catch (error) {
@@ -248,7 +252,7 @@ export default function GoalDetailsPage() {
   }
 
   const handleAddMilestone = async () => {
-    if (!newMilestoneTitle || !newMilestoneDate || !user) return
+    if (!newMilestoneTitle || !newMilestoneDate || !user || !currentGoal) return;
     
     try {
       const newMilestone = {
@@ -304,8 +308,10 @@ export default function GoalDetailsPage() {
   };
 
   const handleDetailsUpdate = async () => {
+    if (!currentGoal) return;
+    
     try {
-      await updateGoal(currentGoal!.id, {
+      await updateGoal(currentGoal.id, {
         title: editedDetails.title,
         description: editedDetails.description
       })
@@ -443,7 +449,7 @@ export default function GoalDetailsPage() {
                     ...prev,
                     description: e.target.value
                   }))}
-                  placeholder="Goal description"
+                  placeholder="Don&apos;t worry if you&apos;re not sure what to write..."
                 />
                 <div className="flex justify-end gap-2">
                   <Button onClick={handleDetailsUpdate}>Save</Button>

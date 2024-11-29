@@ -1,5 +1,6 @@
 "use client"
 
+import { useParams } from 'next/navigation'
 import * as React from "react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -11,6 +12,7 @@ import { Heart, MessageCircle, Share2, Image as ImageIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useUser } from "@clerk/nextjs"
 import { supabase } from "@/lib/supabase/client"
+import Image from 'next/image'
 
 interface Post {
   id: number
@@ -35,49 +37,28 @@ interface Community {
   post_count: number
 }
 
-interface PageProps {
-  params: {
-    id: string
-  }
-}
-
-export default async function CommunityPage({ params }: PageProps) {
-  const { id } = params
-
+export default function CommunityPage() {
+  const params = useParams()
   const { user, isLoaded: isUserLoaded } = useUser()
-  const [community, setCommunity] = useState<Community | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
+  const [community, setCommunity] = useState<Community | null>(null)
   const [newPost, setNewPost] = useState({ content: "", image: null as File | null })
   const [isLoading, setIsLoading] = useState(true)
   const [isMember, setIsMember] = useState(false)
 
-  // Fetch community data and check membership
   useEffect(() => {
-    async function initialize() {
-      if (!isUserLoaded) return
-
+    const fetchData = async () => {
+      if (!isUserLoaded || !params.id) return
+      
       try {
-        // Fetch community data
         const { data: communityData, error: communityError } = await supabase
           .from('communities')
           .select('*')
-          .eq('id', id)
+          .eq('id', params.id)
           .single()
 
         if (communityError) throw communityError
         setCommunity(communityData)
-
-        // Check membership if user is logged in
-        if (user) {
-          const { data: memberData } = await supabase
-            .from('community_members')
-            .select('*')
-            .eq('community_id', id)
-            .eq('user_id', user.id)
-            .single()
-
-          setIsMember(!!memberData)
-        }
 
         // Fetch posts
         const { data: postsData, error: postsError } = await supabase
@@ -89,25 +70,24 @@ export default async function CommunityPage({ params }: PageProps) {
               avatar_url
             )
           `)
-          .eq('community_id', id)
+          .eq('community_id', params.id)
           .order('created_at', { ascending: false })
 
         if (postsError) throw postsError
-        setPosts(postsData)
-
+        setPosts(postsData || [])
       } catch (error) {
-        console.error('Error initializing:', error)
+        console.error('Error:', error)
       } finally {
         setIsLoading(false)
       }
     }
 
-    initialize()
-  }, [id, user, isUserLoaded])
+    fetchData()
+  }, [params.id, isUserLoaded])
 
-  // Handle joining/leaving community
+  // Update membership toggle handler
   const handleMembershipToggle = async () => {
-    if (!user) return
+    if (!user?.id || !params.id) return
 
     try {
       setIsLoading(true)
@@ -117,7 +97,7 @@ export default async function CommunityPage({ params }: PageProps) {
         const { error } = await supabase
           .from('community_members')
           .delete()
-          .eq('community_id', id)
+          .eq('community_id', params.id)
           .eq('user_id', user.id)
 
         if (error) throw error
@@ -127,7 +107,7 @@ export default async function CommunityPage({ params }: PageProps) {
         const { error } = await supabase
           .from('community_members')
           .insert({
-            community_id: id,
+            community_id: params.id,
             user_id: user.id
           })
 
@@ -139,7 +119,7 @@ export default async function CommunityPage({ params }: PageProps) {
       const { data: updatedCommunity } = await supabase
         .from('communities')
         .select('*')
-        .eq('id', id)
+        .eq('id', params.id)
         .single()
 
       if (updatedCommunity) {
@@ -152,9 +132,9 @@ export default async function CommunityPage({ params }: PageProps) {
     }
   }
 
-  // Handle creating a new post
+  // Update create post handler
   const handleCreatePost = async () => {
-    if (!user || !newPost.content.trim()) return
+    if (!user?.id || !params.id || !newPost.content.trim()) return
 
     try {
       setIsLoading(true)
@@ -164,8 +144,8 @@ export default async function CommunityPage({ params }: PageProps) {
         .from('profiles')
         .upsert({
           id: user.id,
-          full_name: user.fullName || 'Anonymous',
-          avatar_url: user.imageUrl,
+          full_name: user.firstName || 'Anonymous',
+          avatar_url: user.imageUrl || '',
           updated_at: new Date().toISOString()
         })
         .select()
@@ -181,7 +161,7 @@ export default async function CommunityPage({ params }: PageProps) {
         .from('posts')
         .insert({
           content: newPost.content,
-          community_id: id,
+          community_id: params.id,
           user_id: user.id
         })
         .select(`
@@ -211,36 +191,16 @@ export default async function CommunityPage({ params }: PageProps) {
     }
   }
 
-  // Add this function to fetch posts
-  const fetchPosts = async () => {
+  const handleLike = async (postId: number) => {
+    if (!user?.id) return;
+    
     try {
-      const { data, error } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          profiles:user_id (
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('community_id', id)
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching posts:', error)
-        return
-      }
-
-      setPosts(data || [])
+      // Add your like handling logic here
+      console.log('Like post:', postId);
     } catch (error) {
-      console.error('Error:', error)
+      console.error('Error liking post:', error);
     }
-  }
-
-  // Add this to your useEffect
-  useEffect(() => {
-    fetchPosts()
-  }, [id])
+  };
 
   if (isLoading || !isUserLoaded) return <div>Loading...</div>
   if (!community) return <div>Community not found</div>
@@ -314,10 +274,12 @@ export default async function CommunityPage({ params }: PageProps) {
                         <p className="font-semibold">{post.author.name}</p>
                         <p className="text-sm text-muted-foreground mt-1">{post.content}</p>
                         {post.image_url && (
-                          <img 
+                          <Image 
                             src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/post-images/${post.image_url}`}
-                            alt="Post image" 
-                            className="mt-2 rounded-md max-h-96 object-cover"
+                            alt="Post image"
+                            width={800}
+                            height={600}
+                            className="mt-2 rounded-md object-cover"
                           />
                         )}
                         <div className="flex space-x-4 mt-4">
