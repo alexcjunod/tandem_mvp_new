@@ -189,7 +189,7 @@ export function useGoals() {
       const { data: milestoneData, error: milestoneError } = await supabase
         .from('milestones')
         .update({ 
-          completed: updates.completed,
+          completed: Boolean(updates.completed),
         })
         .eq('id', milestoneId)
         .select('*')
@@ -205,7 +205,7 @@ export function useGoals() {
       if (goal) {
         // Calculate new progress
         const updatedMilestones = goal.milestones?.map(m =>
-          m.id === milestoneId ? { ...m, completed: updates.completed } : m
+          m.id === milestoneId ? { ...m, completed: Boolean(updates.completed) } : m
         );
         
         const completedMilestones = updatedMilestones?.filter(m => m.completed).length || 0;

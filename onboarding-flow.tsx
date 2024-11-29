@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowLeft, ArrowRight, Cigarette, Running, Plus, Target, Send, Sparkles, Check } from "lucide-react"
+import { ArrowLeft, ArrowRight, Cigarette, Timer, Plus, Target, Send, Sparkles, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -18,7 +18,7 @@ import {
 
 const popularGoals = [
   { id: "quit-smoking", title: "Stop Smoking", icon: Cigarette },
-  { id: "run-marathon", title: "Run a Marathon", icon: Running },
+  { id: "run-marathon", title: "Run a Marathon", icon: Timer },
   { id: "custom", title: "Create Custom Goal", icon: Plus },
 ]
 
