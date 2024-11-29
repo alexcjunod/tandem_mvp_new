@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { getGoals } from "@/lib/supabase/service"
-import { Goal, Task, Milestone } from '@/types/goals'
+import { Goal, Task, Milestone, Reflection, Resource } from '@/types/goals'
 import { useGoals } from '@/hooks/use-goals'
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -386,7 +386,7 @@ export default function Dashboard() {
 
   const customOnlyTasks = useMemo(() => {
     return tasks
-      .filter(task => task.type === 'custom')
+      .filter(task => task.type !== 'daily' && task.type !== 'weekly')
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [tasks]);
 
@@ -450,12 +450,12 @@ export default function Dashboard() {
     if (!newReflectionContent || !user) return;
     
     try {
-      const newReflection = {
+      const newReflection: Omit<Reflection, 'id'> = {
         content: newReflectionContent,
         date: new Date().toISOString(),
         goal_id: newReflectionGoalId === "general" ? null : newReflectionGoalId,
         user_id: user.id
-      } as const;
+      };
 
       const result = await addReflection(newReflection);
       
@@ -474,12 +474,12 @@ export default function Dashboard() {
     if (!newResourceTitle || !newResourceUrl || !user) return;
     
     try {
-      const newResource = {
+      const newResource: Omit<Resource, 'id'> = {
         title: newResourceTitle,
         url: newResourceUrl,
         goal_id: newResourceGoalId === "general" ? null : newResourceGoalId,
         user_id: user.id
-      } as const;
+      };
 
       const result = await addResource(newResource);
       
