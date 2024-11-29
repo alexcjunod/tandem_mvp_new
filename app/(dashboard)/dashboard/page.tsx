@@ -840,7 +840,7 @@ export default function Dashboard() {
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <Textarea
-                      placeholder="Your reflection..."
+                      placeholder="I want to achieve this goal because&apos;..."
                       value={newReflectionContent}
                       onChange={(e) => setNewReflectionContent(e.target.value)}
                     />
@@ -873,7 +873,7 @@ export default function Dashboard() {
           <Card className="flex flex-col">
             <CardHeader className="items-center pb-0">
               <CardTitle>Daily Progress</CardTitle>
-              <CardDescription>Today's tasks completion</CardDescription>
+              <CardDescription>Today&apos;s tasks completion</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 pb-0">
               <ChartContainer

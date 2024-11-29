@@ -84,8 +84,8 @@ export default function CommunityPage() {
 
   // Initial data fetch
   useEffect(() => {
-    fetchData()
-  }, [params.id, isUserLoaded]) // Add fetchData to dependencies if needed
+    fetchData();
+  }, [fetchData, params.id, isUserLoaded]);
 
   // Update membership toggle handler
   const handleMembershipToggle = async () => {

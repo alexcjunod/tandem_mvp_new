@@ -165,7 +165,7 @@ export default function OnboardingPage() {
                   <Label htmlFor="motivation">What&apos;s your primary motivation?</Label>
                   <Textarea
                     id="motivation"
-                    placeholder="I want to achieve this goal because&apos;..."
+                    placeholder="What&apos;s your primary motivation?"
                     value={motivation}
                     onChange={(e) => setMotivation(e.target.value)}
                   />
@@ -190,7 +190,7 @@ export default function OnboardingPage() {
               <CardContent className="pt-6 text-center">
                 <Sparkles className="w-12 h-12 mx-auto mb-4 text-primary" />
                 <p className="text-lg mb-4">
-                  Congratulations on setting your goal! You're one step closer to achieving it.
+                  Congratulations on setting your goal! You&apos;re one step closer to achieving it.
                 </p>
                 <Button 
                   className="w-full" 
