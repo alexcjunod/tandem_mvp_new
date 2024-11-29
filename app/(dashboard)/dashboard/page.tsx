@@ -39,26 +39,6 @@ import {
 } from "@/components/ui/chart"
 import { LabelList } from "recharts"
 
-// Add this interface near the top with other interfaces
-interface Reflection {
-  id: string
-  date: string
-  content: string
-  goal_id: string
-  user_id: string
-  created_at?: string
-}
-
-// Add this interface with the other interfaces
-interface Resource {
-  id: string
-  title: string
-  url: string
-  goal_id: string
-  user_id: string
-  created_at?: string
-}
-
 // Initial mock data (we'll move this to Supabase later)
 const initialGoals = [
   {
@@ -121,13 +101,13 @@ const initialGoals = [
   }
 ]
 
-// Add initial reflections data after initialGoals
+// Use imported types instead
 const initialReflections: Reflection[] = [
   { id: 'r1', date: "2024-03-14", content: "Feeling good about my progress in running. Need to focus more on stretching.", goal_id: '1', user_id: 'user1' },
   { id: 'r2', date: "2024-03-13", content: "Learned a new chord progression today. Excited to incorporate it into a song.", goal_id: '2', user_id: 'user1' },
 ]
 
-// Add initial resources data after initialReflections
+// Use imported types instead
 const initialResources: Resource[] = [
   { id: 'res1', title: "Beginner's Guide to Marathon Training", url: "https://example.com/marathon-guide", goal_id: '1', user_id: 'user1' },
   { id: 'res2', title: "Online Guitar Lessons", url: "https://example.com/guitar-lessons", goal_id: '2', user_id: 'user1' },
