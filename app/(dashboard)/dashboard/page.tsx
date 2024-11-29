@@ -430,10 +430,10 @@ export default function Dashboard() {
     if (!newReflectionContent || !user) return;
     
     try {
-      const newReflection: Omit<Reflection, 'id'> = {
+      const newReflection: Omit<Reflection, "id"> = {
         content: newReflectionContent,
         date: new Date().toISOString(),
-        goal_id: newReflectionGoalId === "general" ? null : newReflectionGoalId,
+        goal_id: newReflectionGoalId,
         user_id: user.id
       };
 
@@ -454,10 +454,10 @@ export default function Dashboard() {
     if (!newResourceTitle || !newResourceUrl || !user) return;
     
     try {
-      const newResource: Omit<Resource, 'id'> = {
+      const newResource: Omit<Resource, "id"> = {
         title: newResourceTitle,
         url: newResourceUrl,
-        goal_id: newResourceGoalId === "general" ? null : newResourceGoalId,
+        goal_id: newResourceGoalId,
         user_id: user.id
       };
 
@@ -719,15 +719,17 @@ export default function Dashboard() {
               <CardDescription>
                 {selectedGoalId === "all" 
                   ? "Your journey across all goals" 
-                  : `Your journey to ${currentGoal.title}`
+                  : currentGoal 
+                    ? `Your journey to ${currentGoal.title}`
+                    : "No goal selected"
                 }
               </CardDescription>
             </CardHeader>
             <CardContent>
               <ul className="space-y-4">
                 {(selectedGoalId === "all" 
-                  ? (currentGoal.milestones ?? [])
-                  : (currentGoal.milestones ?? [])
+                  ? (currentGoal?.milestones ?? [])
+                  : (currentGoal?.milestones ?? [])
                 ).map((milestone) => (
                   <li key={milestone.id} className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -747,8 +749,8 @@ export default function Dashboard() {
                             variant="outline" 
                             className="ml-2"
                             style={{ 
-                              borderColor: milestone.goalColor || currentGoal.color,
-                              color: milestone.goalColor || currentGoal.color
+                              borderColor: milestone.goalColor || (currentGoal?.color ?? 'var(--primary)'),
+                              color: milestone.goalColor || (currentGoal?.color ?? 'var(--primary)')
                             }}
                           >
                             {milestone.goalTitle || "General"}
