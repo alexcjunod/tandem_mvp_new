@@ -46,44 +46,46 @@ export default function CommunityPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isMember, setIsMember] = useState(false)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!isUserLoaded || !params.id) return
-      
-      try {
-        const { data: communityData, error: communityError } = await supabase
-          .from('communities')
-          .select('*')
-          .eq('id', params.id)
-          .single()
+  // Fetch data function
+  const fetchData = async () => {
+    if (!isUserLoaded || !params.id) return
+    
+    try {
+      const { data: communityData, error: communityError } = await supabase
+        .from('communities')
+        .select('*')
+        .eq('id', params.id)
+        .single()
 
-        if (communityError) throw communityError
-        setCommunity(communityData)
+      if (communityError) throw communityError
+      setCommunity(communityData)
 
-        // Fetch posts
-        const { data: postsData, error: postsError } = await supabase
-          .from('posts')
-          .select(`
-            *,
-            profiles:user_id (
-              full_name,
-              avatar_url
-            )
-          `)
-          .eq('community_id', params.id)
-          .order('created_at', { ascending: false })
+      // Fetch posts
+      const { data: postsData, error: postsError } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          profiles:user_id (
+            full_name,
+            avatar_url
+          )
+        `)
+        .eq('community_id', params.id)
+        .order('created_at', { ascending: false })
 
-        if (postsError) throw postsError
-        setPosts(postsData || [])
-      } catch (error) {
-        console.error('Error:', error)
-      } finally {
-        setIsLoading(false)
-      }
+      if (postsError) throw postsError
+      setPosts(postsData || [])
+    } catch (error) {
+      console.error('Error:', error)
+    } finally {
+      setIsLoading(false)
     }
+  }
 
+  // Initial data fetch
+  useEffect(() => {
     fetchData()
-  }, [params.id, isUserLoaded])
+  }, [params.id, isUserLoaded]) // Add fetchData to dependencies if needed
 
   // Update membership toggle handler
   const handleMembershipToggle = async () => {

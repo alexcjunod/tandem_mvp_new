@@ -29,14 +29,13 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { getGoals } from "@/lib/supabase/service"
-import { Goal, Task, Milestone } from '@/types'
+import { Goal, Task, Milestone } from '@/types/goals'
 import { useGoals } from '@/hooks/use-goals'
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   ChartConfig,
   ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
+  CustomTooltip,
 } from "@/components/ui/chart"
 import { LabelList } from "recharts"
 
@@ -362,11 +361,12 @@ export default function Dashboard() {
         id: "all",
         title: "All Goals",
         tasks: goals.flatMap(g => g.tasks ?? []),
-        milestones: goals.flatMap(g => g.milestones ?? [])
-      }
+        milestones: goals.flatMap(g => g.milestones ?? []),
+        color: `hsl(var(--primary))`
+      } as const;
     }
-    return goals.find(g => g.id === selectedGoalId)
-  }, [selectedGoalId, goals])
+    return goals.find(g => g.id === selectedGoalId) || null;
+  }, [selectedGoalId, goals]);
 
   const dailyTasks = useMemo(() => {
     return tasks
@@ -450,12 +450,12 @@ export default function Dashboard() {
     if (!newReflectionContent || !user) return;
     
     try {
-      const newReflection: Omit<Reflection, 'id'> = {
+      const newReflection = {
         content: newReflectionContent,
         date: new Date().toISOString(),
         goal_id: newReflectionGoalId === "general" ? null : newReflectionGoalId,
         user_id: user.id
-      };
+      } as const;
 
       const result = await addReflection(newReflection);
       
@@ -474,12 +474,12 @@ export default function Dashboard() {
     if (!newResourceTitle || !newResourceUrl || !user) return;
     
     try {
-      const newResource: Omit<Resource, 'id'> = {
+      const newResource = {
         title: newResourceTitle,
         url: newResourceUrl,
         goal_id: newResourceGoalId === "general" ? null : newResourceGoalId,
         user_id: user.id
-      };
+      } as const;
 
       const result = await addResource(newResource);
       
@@ -705,7 +705,6 @@ export default function Dashboard() {
                             mode="single"
                             selected={newTaskDate}
                             onSelect={setNewTaskDate}
-                            initialFocus
                           />
                         </PopoverContent>
                       </Popover>
@@ -763,7 +762,7 @@ export default function Dashboard() {
                         milestone.completed ? 'line-through text-muted-foreground' : ''
                       }`}>
                         <span>{milestone.title}</span>
-                        {selectedGoalId === "all" && (
+                        {selectedGoalId === "all" && milestone.goal_id && (
                           <Badge 
                             variant="outline" 
                             className="ml-2"
@@ -772,7 +771,7 @@ export default function Dashboard() {
                               color: milestone.goalColor || currentGoal.color
                             }}
                           >
-                            {milestone.goalTitle || currentGoal.title}
+                            {milestone.goalTitle || "General"}
                           </Badge>
                         )}
                       </div>
@@ -919,30 +918,7 @@ export default function Dashboard() {
                       fontSize={11}
                     />
                   </RadialBar>
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      return (
-                        <div className="rounded-lg border bg-background p-2 shadow-sm">
-                          <div className="grid gap-2">
-                            {payload.map((entry, index) => (
-                              <div key={index} className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <div
-                                    className="h-2 w-2 rounded-full"
-                                    style={{ backgroundColor: entry.payload.fill }}
-                                  />
-                                  <span className="text-sm text-muted-foreground">
-                                    {entry.payload.name} {/* Only show the name of the goal */}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    }}
-                  />
+                  <Tooltip content={CustomTooltip} />
                 </RadialBarChart>
               </ChartContainer>
             </CardContent>
