@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation'
 import * as React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
@@ -47,7 +47,7 @@ export default function CommunityPage() {
   const [isMember, setIsMember] = useState(false)
 
   // Fetch data function
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!isUserLoaded || !params.id) return
     
     try {
@@ -80,7 +80,7 @@ export default function CommunityPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [isUserLoaded, params.id]);
 
   // Initial data fetch
   useEffect(() => {
