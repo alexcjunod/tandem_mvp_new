@@ -395,7 +395,7 @@ export default function GoalDetailsPage() {
       <div className="container mx-auto p-6">
         <div className="text-center">
           <h2 className="text-2xl font-bold">Goal not found</h2>
-          <p className="text-muted-foreground mt-2">The goal you're looking for doesn't exist.</p>
+          <p className="text-muted-foreground mt-2">The goal you&apos;re looking for doesn&apos;t exist.</p>
           <Button
             variant="ghost"
             className="mt-4"
