@@ -749,11 +749,11 @@ export default function Dashboard() {
                             variant="outline" 
                             className="ml-2"
                             style={{ 
-                              borderColor: milestone.goalColor || (currentGoal?.color ?? 'var(--primary)'),
-                              color: milestone.goalColor || (currentGoal?.color ?? 'var(--primary)')
+                              borderColor: goals.find(g => g.id === milestone.goal_id)?.color ?? 'var(--primary)',
+                              color: goals.find(g => g.id === milestone.goal_id)?.color ?? 'var(--primary)'
                             }}
                           >
-                            {milestone.goalTitle || "General"}
+                            {goals.find(g => g.id === milestone.goal_id)?.title || "General"}
                           </Badge>
                         )}
                       </div>

@@ -16,11 +16,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Goal, Milestone } from '@/types/goals'
 
 const calculateProgress = (goal: Goal) => {
   if (!goal.milestones || goal.milestones.length === 0) return 0;
   
-  const completedMilestones = goal.milestones.filter(m => m.completed).length;
+  const completedMilestones = goal.milestones.filter((m: Milestone) => m.completed).length;
   const totalMilestones = goal.milestones.length;
   
   return Math.round((completedMilestones / totalMilestones) * 100);

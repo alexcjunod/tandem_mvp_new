@@ -11,6 +11,7 @@ import AIChat from "@/components/goals/ai-chat"
 import { useGoals } from "@/hooks/use-goals"
 import { toast } from "sonner"
 import type { GoalStructure } from "@/types/goals"
+import { Goal } from '@/types/goals'
 
 const predefinedGoals = [
   { 
@@ -99,10 +100,30 @@ export default function OnboardingPage() {
     }
   }
 
-  const handleGoalCreated = (goal: GoalStructure) => {
+  const handleGoalCreated = async (goalStructure: GoalStructure) => {
+    const goal: Goal = {
+      id: '', // will be set by the database
+      user_id: '', // will be set by the database
+      title: goalStructure.general,
+      description: goalStructure.specific,
+      progress: 0,
+      start_date: new Date().toISOString(),
+      end_date: goalStructure.timeframe,
+      color: 'hsl(10, 70%, 50%)', // default color
+      smart_goal: {
+        specific: goalStructure.specific,
+        measurable: goalStructure.measurable,
+        achievable: 'true',
+        relevant: 'true',
+        timeBound: goalStructure.timeframe
+      },
+      reasoning: goalStructure.general
+    };
+    
+    // TODO: Save goal to database
     toast.success("Goal created successfully!")
-    setStep(4)
-  }
+    router.push('/dashboard');
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">

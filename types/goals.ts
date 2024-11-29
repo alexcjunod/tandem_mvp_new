@@ -1,13 +1,26 @@
 export interface Goal {
   id: string
+  user_id: string
   title: string
   description: string
   progress: number
+  start_date: string
+  end_date: string
   color: string
+  smart_goal: {
+    specific: string
+    measurable: string
+    achievable: string
+    relevant: string
+    timeBound: string
+  }
+  reasoning: string
   tasks?: Task[]
   milestones?: Milestone[]
   reflections?: Reflection[]
   resources?: Resource[]
+  created_at?: string
+  updated_at?: string
 }
 
 export interface Task {
@@ -15,10 +28,10 @@ export interface Task {
   title: string
   completed: boolean
   date: string
+  goal_id: string
   type: 'daily' | 'weekly' | 'custom'
-  goal_id?: string | null
-  user_id: string
   weekday?: number
+  user_id: string
 }
 
 export interface Milestone {
@@ -27,16 +40,15 @@ export interface Milestone {
   date: string
   completed: boolean
   goal_id: string
-  goalTitle: string
-  goalColor: string
 }
 
 export interface Reflection {
   id: string
-  content: string
   date: string
+  content: string
   goal_id: string
   user_id: string
+  created_at?: string
 }
 
 export interface Resource {
@@ -45,4 +57,13 @@ export interface Resource {
   url: string
   goal_id: string
   user_id: string
+  created_at?: string
+}
+
+export interface GoalStructure {
+  general: string
+  specific: string
+  measurable: string
+  timeframe: string
+  category: string
 } 
