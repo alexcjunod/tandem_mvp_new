@@ -22,6 +22,7 @@ export interface GoalDetails {
 }
 
 export type ConversationState = 
+  | "INITIAL"
   | "WELCOME"
   | "AWAITING_GOAL"
   | "AWAITING_WHY"
@@ -29,6 +30,7 @@ export type ConversationState =
   | "AWAITING_MEASURABLE"
   | "AWAITING_TIMELINE"
   | "GENERATING_PLAN"
+  | "CONFIRMING_PLAN"
   | "COMPLETED"
 
 export interface ChatState {
