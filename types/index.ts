@@ -69,8 +69,6 @@ export interface Milestone {
   date: string
   completed: boolean
   goal_id: string
-  goalTitle?: string
-  goalColor?: string
 }
 
 export interface Task {
@@ -78,10 +76,9 @@ export interface Task {
   title: string
   completed: boolean
   date: string
-  goal_id?: string
-  type: 'daily' | 'weekly' | 'custom'
-  weekday?: 0 | 1 | 2 | 3 | 4 | 5 | 6
-  tag?: string
+  goal_id: string
+  type: 'daily' | 'weekly'
+  weekday?: number
   user_id: string
 }
 

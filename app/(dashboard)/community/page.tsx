@@ -45,12 +45,11 @@ export default function CommunityPage() {
   const [showComments, setShowComments] = useState<number | null>(null)
   const [comments, setComments] = useState<{ [key: number]: Comment[] }>({})
 
-  // Fetch initial data
+  // Move fetchPosts outside useEffect so it can be referenced
   const fetchPosts = async () => {
     try {
-      console.log('Fetching posts...')
       const { data: postsData, error } = await supabase
-        .from('posts')
+        .from("posts")
         .select(`
           id,
           content,
@@ -66,69 +65,66 @@ export default function CommunityPage() {
             color
           )
         `)
-        .order('created_at', { ascending: false })
+        .order("created_at", { ascending: false })
 
-      console.log('Posts Data:', postsData)
-      
-      if (error) {
-        console.error('Error fetching posts:', error)
-        return
-      }
-
-      if (postsData) {
-        setPosts(postsData)
-        console.log('Posts State Updated:', postsData)
-      }
+      if (error) throw error
+      setPosts(postsData || [])
     } catch (error) {
-      console.error('Error fetching posts:', error)
+      console.error("Error fetching posts:", error)
     }
   }
 
+  // Initial data fetch
   useEffect(() => {
     async function fetchData() {
       try {
-        console.log('Fetching data...')
-        
-        // Fetch communities
         const { data: communitiesData, error: communitiesError } = await supabase
-          .from('communities')
-          .select('*')
-          .order('member_count', { ascending: false })
+          .from("communities")
+          .select("*")
+          .order("member_count", { ascending: false })
 
-        console.log('Communities Data:', communitiesData)
-        console.log('Communities Error:', communitiesError)
+        if (communitiesError) throw communitiesError
+        setCommunities(communitiesData || [])
 
-        // Fetch posts
-        await fetchPosts()
-
-        if (communitiesData) {
-          setCommunities(communitiesData)
-        }
-
-        // Log state after setting
-        console.log('Communities State:', communities)
-        console.log('Posts State:', posts)
-
-        // Fetch joined communities if user is logged in
+        // Fetch joined communities if user exists
         if (user) {
           const { data: joinedData } = await supabase
-            .from('community_members')
-            .select('community_id')
-            .eq('user_id', user.id)
+            .from("community_members")
+            .select("community_id")
+            .eq("user_id", user.id)
 
-          if (joinedData) {
-            setJoinedCommunities(joinedData.map(d => d.community_id))
-          }
+          setJoinedCommunities(joinedData?.map((d) => d.community_id) || [])
         }
+
+        // Fetch initial posts
+        await fetchPosts()
       } catch (error) {
-        console.error('Error fetching data:', error)
-      } finally {
-        setIsLoading({})  // Fixed: Initialize with empty object instead of false
+        console.error("Error fetching data:", error)
       }
     }
 
     fetchData()
-  }, [user])
+  }, [user]) // Only depend on user changes
+
+  // Separate useEffect for real-time subscription
+  useEffect(() => {
+    // Set up real-time subscription for posts
+    const postsChannel = supabase
+      .channel("public:posts")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "posts" },
+        async () => {
+          await fetchPosts() // Refresh posts when changes occur
+        }
+      )
+      .subscribe()
+
+    // Cleanup subscription
+    return () => {
+      supabase.removeChannel(postsChannel)
+    }
+  }, []) // Empty dependency array since we don't need to re-subscribe
 
   // Filter communities based on search
   const filteredCommunities = communities.filter(community =>
@@ -336,57 +332,6 @@ export default function CommunityPage() {
       }
     }
   }
-
-  // Set up real-time subscriptions
-  useEffect(() => {
-    // Subscribe to new posts
-    const postsChannel = supabase
-      .channel('public:posts')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'posts'
-      }, async (payload) => {
-        console.log('Real-time update:', payload)
-        // Fetch all posts again when there's a change
-        await fetchPosts()
-      })
-      .subscribe()
-
-    // Fetch initial posts
-    fetchPosts()
-
-    // Cleanup subscription
-    return () => {
-      supabase.removeChannel(postsChannel)
-    }
-  }, [])
-
-  // Add this useEffect after your other useEffects
-  useEffect(() => {
-    const postsChannel = supabase
-      .channel('custom-channel')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'posts',
-        },
-        (payload) => {
-          console.log('Change received!', payload)
-          fetchPosts() // Refresh posts when changes occur
-        }
-      )
-      .subscribe()
-
-    // Initial fetch
-    fetchPosts()
-
-    return () => {
-      supabase.removeChannel(postsChannel)
-    }
-  }, []) // Empty dependency array
 
   return (
     <div className="container mx-auto p-6">

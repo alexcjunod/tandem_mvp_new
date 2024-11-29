@@ -256,6 +256,10 @@ export default function Dashboard() {
     addReflection,
     addResource
   } = useGoals()
+  const { user, isLoaded } = useUser()
+  const { getToken } = useAuth()
+  
+  // State declarations
   const [date, setDate] = useState<Date>(new Date())
   const [selectedGoalId, setSelectedGoalId] = useState<string>("all")
   const [showConfetti, setShowConfetti] = useState(false)
@@ -271,111 +275,114 @@ export default function Dashboard() {
   const [newResourceTitle, setNewResourceTitle] = useState("")
   const [newResourceUrl, setNewResourceUrl] = useState("")
   const [newResourceGoalId, setNewResourceGoalId] = useState<string>("general")
-  const { user, isLoaded } = useUser()
-  const { getToken } = useAuth()
   const [newTaskWeekday, setNewTaskWeekday] = useState<number | undefined>(undefined)
 
-  // First, set up Supabase auth
-  useEffect(() => {
-    async function setupSupabase() {
-      if (!user || !isLoaded) return
-      
-      try {
-        const token = await getToken({ template: "supabase" })
-        if (token) {
-          await updateSupabaseAuthToken(token)
-          console.log('Supabase auth token set')
-          await refreshGoals()
-          console.log('Goals refreshed after auth setup')
-        }
-      } catch (err) {
-        console.error('Error setting up Supabase:', err)
-        toast.error('Failed to set up authentication')
+  // Memoize the setup function to avoid recreation on every render
+  const setupSupabase = useMemo(() => async () => {
+    if (!user || !isLoaded) return
+    
+    try {
+      const token = await getToken({ template: "supabase" })
+      if (token) {
+        await updateSupabaseAuthToken(token)
+        console.log('Supabase auth token set')
+        await refreshGoals()
+        console.log('Goals refreshed after auth setup')
       }
+    } catch (err) {
+      console.error('Error setting up Supabase:', err)
+      toast.error('Failed to set up authentication')
     }
+  }, [user, isLoaded, getToken, refreshGoals])
 
+  // Initial setup effect
+  useEffect(() => {
     setupSupabase()
-  }, [user, isLoaded, getToken])
+  }, [setupSupabase])
 
-  // Move all useMemo hooks together, before any conditional returns
+  // Memoize handlers that use refreshGoals
+  const handleTaskToggle = useMemo(() => async (taskId: string) => {
+    try {
+      const task = tasks.find(t => t.id === taskId)
+      if (!task) {
+        console.error('Task not found:', taskId)
+        return
+      }
+
+      const result = await updateGoalTask(taskId, { 
+        completed: !task.completed 
+      })
+
+      if (result) {
+        await refreshGoals()
+        toast.success('Task updated successfully')
+      }
+    } catch (error) {
+      console.error('Error toggling task:', error)
+      toast.error("Failed to update task")
+    }
+  }, [tasks, updateGoalTask, refreshGoals])
+
+  const handleMilestoneToggle = useMemo(() => async (milestoneId: string, goalId?: string) => {
+    try {
+      const goal = goals.find(g => g.id === (goalId || selectedGoalId))
+      if (!goal || !goal.milestones) {
+        console.error('Goal or milestones not found')
+        return
+      }
+
+      const milestone = goal.milestones.find(m => m.id === milestoneId)
+      if (!milestone) {
+        console.error('Milestone not found:', milestoneId)
+        return
+      }
+
+      const result = await updateGoalMilestone(milestone.id, { 
+        completed: !milestone.completed 
+      })
+
+      if (result) {
+        await refreshGoals()
+        if (!milestone.completed) {
+          setShowConfetti(true)
+          setTimeout(() => setShowConfetti(false), 3000)
+        }
+        toast.success('Milestone updated successfully')
+      }
+    } catch (error) {
+      console.error('Error toggling milestone:', error)
+      toast.error("Failed to update milestone")
+    }
+  }, [goals, selectedGoalId, updateGoalMilestone, refreshGoals])
+
+  // Memoize data calculations
   const currentGoal = useMemo(() => {
     if (selectedGoalId === "all") {
       return {
         id: "all",
-        user_id: user?.id || "",
         title: "All Goals",
-        description: "",
-        progress: 0,
-        start_date: new Date().toISOString(),
-        end_date: new Date().toISOString(),
-        color: "",
-        smart_goal: {
-          specific: "",
-          measurable: "",
-          achievable: "",
-          relevant: "",
-          timeBound: ""
-        },
-        reasoning: "",
         tasks: goals.flatMap(g => g.tasks ?? []),
-        milestones: goals.flatMap(g => (g.milestones ?? []).map(m => ({
-          ...m,
-          goalTitle: g.title,
-          goalColor: g.color
-        })))
-      } as Goal;
+        milestones: goals.flatMap(g => g.milestones ?? [])
+      }
     }
-    
-    return goals.find(g => g.id === selectedGoalId) || goals[0] || {
-      id: "",
-      user_id: user?.id || "",
-      title: "",
-      description: "",
-      progress: 0,
-      start_date: new Date().toISOString(),
-      end_date: new Date().toISOString(),
-      color: "",
-      smart_goal: {
-        specific: "",
-        measurable: "",
-        achievable: "",
-        relevant: "",
-        timeBound: ""
-      },
-      reasoning: "",
-      tasks: [],
-      milestones: []
-    } as Goal;
-  }, [selectedGoalId, goals, user?.id]);
+    return goals.find(g => g.id === selectedGoalId)
+  }, [selectedGoalId, goals])
 
   const dailyTasks = useMemo(() => {
     return tasks
-      .filter(task => {
-        // Only show daily tasks and custom tasks for today
-        if (task.type === 'custom') {
-          return isSameDay(new Date(task.date), date);
-        }
-        
-        // Only show daily tasks
-        return task.type === 'daily';
-      })
-      .sort((a, b) => a.title.localeCompare(b.title)); // Optional: sort by title
-  }, [tasks, date]);
+      .filter(task => task.type === 'daily')
+      .sort((a, b) => a.title.localeCompare(b.title))
+  }, [tasks])
 
   const weeklyTasks = useMemo(() => {
     const today = new Date()
-    const currentWeekday = today.getDay()
-    
     return tasks
       .filter(task => 
-        // Only show weekly tasks for the current day
-        task.type === 'weekly' && task.weekday === currentWeekday
+        task.type === 'weekly' && 
+        task.weekday === today.getDay()
       )
-      .sort((a, b) => {
-        if (a.weekday === undefined || b.weekday === undefined) return 0;
-        return a.weekday - b.weekday;
-      });
-  }, [tasks]);
+      .sort((a, b) => a.title.localeCompare(b.title))
+  }, [tasks])
 
   const customOnlyTasks = useMemo(() => {
     return tasks
@@ -402,65 +409,6 @@ export default function Dashboard() {
   }
 
   // Handlers
-  const handleTaskToggle = async (taskId: string) => {
-    try {
-      // Find the task in the tasks array
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) {
-        console.error('Task not found:', taskId);
-        return;
-      }
-
-      console.log('Tasks before toggle:', tasks);
-      console.log('Toggling task:', taskId);
-
-      // Update the task's completion status
-      const result = await updateGoalTask(taskId, { 
-        completed: !task.completed
-      });
-
-      if (result) {
-        // Refresh goals to get the updated task list
-        await refreshGoals();
-        toast.success('Task updated successfully');
-      }
-    } catch (error) {
-      console.error('Error toggling task:', error);
-      toast.error("Failed to update task");
-    }
-  };
-
-  const handleMilestoneToggle = async (milestoneId: string, goalId?: string) => {
-    try {
-      const goal = goals.find(g => g.id === (goalId || selectedGoalId));
-      if (!goal || !goal.milestones) {
-        console.error('Goal or milestones not found');
-        return;
-      }
-
-      const milestone = goal.milestones.find(m => m.id === milestoneId);
-      if (!milestone) {
-        console.error('Milestone not found:', milestoneId);
-        return;
-      }
-
-      const result = await updateGoalMilestone(milestone.id, {
-        completed: !milestone.completed
-      });
-
-      if (result) {
-        if (!milestone.completed) {
-          setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 3000);
-        }
-        toast.success('Milestone updated successfully');
-      }
-    } catch (error) {
-      console.error('Error toggling milestone:', error);
-      toast.error("Failed to update milestone");
-    }
-  };
-
   const handleAddTask = async () => {
     if (!newTaskTitle || !user) return;
     

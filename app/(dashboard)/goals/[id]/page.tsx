@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useUser } from "@clerk/nextjs"
 import { format } from 'date-fns'
 import { useRouter, useParams } from "next/navigation"
@@ -42,10 +42,12 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 
+import type { Goal, Task, Milestone } from "@/types";
+
 const calculateProgress = (goal: Goal) => {
-  if (!goal.milestones || goal.milestones.length === 0) return 0;
+  if (!goal?.milestones || goal.milestones.length === 0) return 0;
   
-  const completedMilestones = goal.milestones.filter(m => m.completed).length;
+  const completedMilestones = goal.milestones.filter((m: Milestone) => m.completed).length;
   const totalMilestones = goal.milestones.length;
   
   return Math.round((completedMilestones / totalMilestones) * 100);
@@ -80,7 +82,7 @@ export default function GoalDetailsPage() {
   const [newTaskType, setNewTaskType] = useState<'daily' | 'weekly'>('daily')
   const [newMilestoneTitle, setNewMilestoneTitle] = useState("")
   const [newMilestoneDate, setNewMilestoneDate] = useState("")
-  const [currentGoal, setCurrentGoal] = useState<any>(null)
+  const [currentGoal, setCurrentGoal] = useState<Goal | null>(null)
   const [isEditingDetails, setIsEditingDetails] = useState(false)
   const [editedDetails, setEditedDetails] = useState({
     title: '',
@@ -91,112 +93,138 @@ export default function GoalDetailsPage() {
   const [showAllTasks, setShowAllTasks] = useState(false)
   const [showAllMilestones, setShowAllMilestones] = useState(false)
 
+  // Memoize the logging function to avoid recreation
+  const logComponentState = useMemo(() => (state: {
+    user: any,
+    params: any,
+    goals: Goal[],
+    isLoading: boolean
+  }) => {
+    console.log('Component state:', state);
+  }, []);
+
+  // Initial logging effect
   useEffect(() => {
-    console.log('Component mounted with:', {
+    logComponentState({
       user,
       params,
       goals,
       isLoading
     });
-  }, []);
+  }, [logComponentState, user, params, goals, isLoading]);
 
-  // Fetch specific goal data
-  useEffect(() => {
-    const initializeGoal = async () => {
-      if (!user) {
-        console.log('No user yet, waiting...'); // Debug log
-        return;
-      }
-      
-      if (!params?.id) {
-        console.log('No params.id yet, waiting...'); // Debug log
-        return;
-      }
-      
-      try {
-        console.log('Starting initialization with:', {
-          userId: user.id,
-          goalId: params.id,
-          goalsCount: goals.length
+  // Memoize the initialization function
+  const initializeGoal = useMemo(() => async () => {
+    if (!user || !params?.id) return;
+
+    try {
+      setIsLoading(true);
+
+      const existingGoal = goals.find(g => g.id === params.id);
+      if (existingGoal) {
+        setCurrentGoal(existingGoal);
+        setEditedEndDate(existingGoal.end_date);
+        setEditedSmartGoal(existingGoal.smart_goal);
+        setEditedDetails({
+          title: existingGoal.title,
+          description: existingGoal.description,
         });
-        
-        setIsLoading(true);
-        
-        // First try to find the goal in the existing goals array
-        const existingGoal = goals.find(g => g.id === params.id);
-        
-        if (existingGoal) {
-          console.log('Found existing goal:', existingGoal);
-          setCurrentGoal(existingGoal);
-          setEditedEndDate(existingGoal.end_date);
-          setEditedSmartGoal(existingGoal.smart_goal);
-          setEditedDetails({
-            title: existingGoal.title,
-            description: existingGoal.description
-          });
-          setIsLoading(false);
-          return;
-        }
-
-        console.log('Goal not found in existing goals, fetching from Supabase');
-
-        // If not found, fetch directly from Supabase
-        const { data: goalData, error: goalError } = await supabase
-          .from('goals')
-          .select(`
-            *,
-            tasks (*),
-            milestones (*),
-            reflections (*),
-            resources (*)
-          `)
-          .eq('id', params.id)
-          .single();
-
-        if (goalError) {
-          console.error('Supabase error:', goalError);
-          throw goalError;
-        }
-
-        if (goalData) {
-          console.log('Successfully fetched goal data:', goalData);
-          setCurrentGoal(goalData);
-          setEditedEndDate(goalData.end_date);
-          setEditedSmartGoal(goalData.smart_goal);
-          setEditedDetails({
-            title: goalData.title,
-            description: goalData.description
-          });
-        } else {
-          console.log('No goal data found');
-        }
-      } catch (err) {
-        console.error('Error in initialization:', err);
-        toast.error('Failed to load goal');
-      } finally {
-        console.log('Setting loading to false');
         setIsLoading(false);
+        return;
       }
-    };
 
-    console.log('Effect dependencies changed:', {
-      hasUser: !!user,
-      paramsId: params?.id,
-      goalsCount: goals.length
-    });
-    
-    initializeGoal();
+      const { data: goalData, error: goalError } = await supabase
+        .from('goals')
+        .select(`
+          *,
+          tasks (*),
+          milestones (*),
+          reflections (*),
+          resources (*)
+        `)
+        .eq('id', params.id)
+        .single();
+
+      if (goalError) throw goalError;
+
+      if (goalData) {
+        setCurrentGoal(goalData);
+        setEditedEndDate(goalData.end_date);
+        setEditedSmartGoal(goalData.smart_goal);
+        setEditedDetails({
+          title: goalData.title,
+          description: goalData.description,
+        });
+      }
+    } catch (err) {
+      console.error('Error in initialization:', err);
+      toast.error('Failed to load goal');
+    } finally {
+      setIsLoading(false);
+    }
   }, [user, params?.id, goals, supabase]);
 
+  // Effect to initialize goal
   useEffect(() => {
-    console.log('State changed:', {
+    initializeGoal();
+  }, [initializeGoal]);
+
+  // Memoize state logging function
+  const logStateChanges = useMemo(() => (state: {
+    isLoading: boolean,
+    hasCurrentGoal: boolean,
+    editedEndDate: string,
+    editedSmartGoal: any,
+    editedDetails: any
+  }) => {
+    console.log('State changed:', state);
+  }, []);
+
+  // Effect to log state changes
+  useEffect(() => {
+    logStateChanges({
       isLoading,
       hasCurrentGoal: !!currentGoal,
       editedEndDate,
       editedSmartGoal,
       editedDetails
     });
-  }, [isLoading, currentGoal, editedEndDate, editedSmartGoal, editedDetails]);
+  }, [logStateChanges, isLoading, currentGoal, editedEndDate, editedSmartGoal, editedDetails]);
+
+  // Memoize handlers that use currentGoal
+  const handleAddTask = useMemo(() => async () => {
+    if (!newTaskTitle || !user || !currentGoal) return;
+    
+    try {
+      const newTask = {
+        title: newTaskTitle,
+        completed: false,
+        date: new Date().toISOString(),
+        goal_id: currentGoal.id,
+        type: newTaskType,
+        weekday: newTaskType === 'weekly' ? newTaskWeekday : undefined,
+        user_id: user.id
+      };
+
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert([newTask])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await refreshGoals();
+      
+      setNewTaskTitle("");
+      setNewTaskType('daily');
+      setNewTaskWeekday(undefined);
+      toast.success('Task added successfully!');
+    } catch (error) {
+      console.error('Error adding task:', error);
+      toast.error('Failed to add task');
+    }
+  }, [newTaskTitle, user, currentGoal, newTaskType, newTaskWeekday, supabase, refreshGoals]);
 
   const handleEndDateUpdate = async () => {
     try {
@@ -216,40 +244,6 @@ export default function GoalDetailsPage() {
     } catch (error) {
       console.error('Error updating SMART goal:', error)
       toast.error('Failed to update SMART goal')
-    }
-  }
-
-  const handleAddTask = async () => {
-    if (!newTaskTitle || !user) return
-    
-    try {
-      const newTask = {
-        title: newTaskTitle,
-        completed: false,
-        date: new Date().toISOString(),
-        goal_id: currentGoal.id,
-        type: newTaskType,
-        weekday: newTaskType === 'weekly' ? newTaskWeekday : undefined,
-        user_id: user.id
-      }
-
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert([newTask])
-        .select()
-        .single()
-
-      if (error) throw error
-
-      await refreshGoals()
-      
-      setNewTaskTitle("")
-      setNewTaskType('daily')
-      setNewTaskWeekday(undefined)
-      toast.success('Task added successfully!')
-    } catch (error) {
-      console.error('Error adding task:', error)
-      toast.error('Failed to add task')
     }
   }
 
@@ -284,7 +278,7 @@ export default function GoalDetailsPage() {
 
   const handleMilestoneToggle = async (milestoneId: string) => {
     try {
-      const milestone = currentGoal?.milestones?.find(m => m.id === milestoneId);
+      const milestone = currentGoal?.milestones?.find((m: Milestone) => m.id === milestoneId);
       if (!milestone) {
         console.error('Milestone not found:', milestoneId);
         return;
@@ -346,7 +340,7 @@ export default function GoalDetailsPage() {
 
   const handleTaskToggle = async (taskId: string) => {
     try {
-      const task = currentGoal.tasks?.find(t => t.id === taskId);
+      const task = currentGoal?.tasks?.find((t: Task) => t.id === taskId);
       if (!task) {
         console.error('Task not found:', taskId);
         return;
@@ -710,7 +704,7 @@ export default function GoalDetailsPage() {
                   {(showAllTasks 
                     ? currentGoal.tasks 
                     : currentGoal.tasks?.slice(0, 3)
-                  )?.map((task) => (
+                  )?.map((task: Task) => (
                     <div
                       key={task.id}
                       className="flex items-center justify-between p-2 rounded hover:bg-muted group"
@@ -793,7 +787,7 @@ export default function GoalDetailsPage() {
                   {(showAllMilestones 
                     ? currentGoal.milestones 
                     : currentGoal.milestones?.slice(0, 3)
-                  )?.map((milestone) => (
+                  )?.map((milestone: Milestone) => (
                     <div
                       key={milestone.id}
                       className="flex items-center justify-between p-2 rounded hover:bg-muted group"
@@ -846,14 +840,14 @@ export default function GoalDetailsPage() {
               <div>
                 <h4 className="text-sm font-medium mb-2">Tasks Completed</h4>
                 <p className="text-2xl font-bold">
-                  {currentGoal.tasks?.filter(t => t.completed).length} /{' '}
+                  {currentGoal.tasks?.filter((t: Task) => t.completed).length} /{' '}
                   {currentGoal.tasks?.length}
                 </p>
               </div>
               <div>
                 <h4 className="text-sm font-medium mb-2">Milestones Achieved</h4>
                 <p className="text-2xl font-bold">
-                  {currentGoal.milestones?.filter(m => m.completed).length} /{' '}
+                  {currentGoal.milestones?.filter((m: Milestone) => m.completed).length} /{' '}
                   {currentGoal.milestones?.length}
                 </p>
               </div>
