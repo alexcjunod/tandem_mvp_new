@@ -1,19 +1,12 @@
 "use client"
 
-import { useState } from 'react'
-import { Calendar as BigCalendar, dateFnsLocalizer, View } from 'react-big-calendar'
-import format from 'date-fns/format'
-import parse from 'date-fns/parse'
-import startOfWeek from 'date-fns/startOfWeek'
-import getDay from 'date-fns/getDay'
-import addDays from 'date-fns/addDays'
-import isSameDay from 'date-fns/isSameDay'
-import startOfMonth from 'date-fns/startOfMonth'
-import endOfMonth from 'date-fns/endOfMonth'
-import eachDayOfInterval from 'date-fns/eachDayOfInterval'
+import { useState, useEffect } from 'react'
+import FullCalendar from '@fullcalendar/react'
+import dayGridPlugin from '@fullcalendar/daygrid'
+import interactionPlugin from '@fullcalendar/interaction'
 import { Card } from "@/components/ui/card"
 import { useGoals } from "@/hooks/use-goals"
-import { Task, Milestone } from "@/types/goals"
+import { Task, Milestone, Goal } from "@/types/goals"
 import { Button } from "@/components/ui/button"
 import { Plus, Target, Calendar } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -24,34 +17,28 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { useUser } from "@clerk/nextjs"
 import { supabase } from "@/lib/supabase/client"
-import './calendar.css'
-
-const locales = {
-  'en-US': require('date-fns/locale/en-US')
-}
-
-const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek,
-  getDay,
-  locales,
-})
+import './fullcalendar.css'
+import { addDays, isBefore, startOfDay, endOfDay, eachDayOfInterval, getDay, parseISO, isAfter } from 'date-fns'
 
 type TaskType = 'daily' | 'weekly' | 'custom'
 
 interface CalendarEvent {
   id: string
   title: string
-  start: Date
-  end: Date
+  start: string
   allDay: boolean
-  resource: {
-    type: TaskType | 'milestone'
+  backgroundColor?: string
+  borderColor?: string
+  textColor?: string
+  display?: 'block' | 'list-item'
+  classNames?: string[]
+  extendedProps: {
+    type: TaskType | 'milestone' | 'task-count'
     goalId?: string
     goalTitle?: string
     goalColor?: string
-    completed: boolean
+    completed?: boolean
+    tasks?: Task[]
   }
 }
 
@@ -59,32 +46,103 @@ export default function CalendarPage() {
   const { goals, tasks, isLoading, refreshGoals } = useGoals()
   const { user } = useUser()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
-  const [currentDate, setCurrentDate] = useState<Date>(new Date())
-  const [view, setView] = useState<View>('month')
+  const [selectedTasks, setSelectedTasks] = useState<Task[]>([])
   const [newTaskTitle, setNewTaskTitle] = useState("")
-  const [newTaskType, setNewTaskType] = useState<'daily' | 'weekly' | 'custom'>('custom')
+  const [newTaskType, setNewTaskType] = useState<TaskType>('custom')
   const [newTaskGoalId, setNewTaskGoalId] = useState<string>("no-goal")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isTaskListOpen, setIsTaskListOpen] = useState(false)
+  const [localTaskStates, setLocalTaskStates] = useState<{ [key: string]: boolean }>({})
 
-  // Generate recurring events for the visible month
+  // Initialize local task states when tasks change
+  useEffect(() => {
+    const newLocalStates = tasks.reduce((acc, task) => {
+      acc[task.id] = task.completed
+      return acc
+    }, {} as { [key: string]: boolean })
+    setLocalTaskStates(newLocalStates)
+  }, [tasks])
+
+  const getTaskEndDate = (task: Task, goals: Goal[]): Date => {
+    if (task.goal_id) {
+      const goal = goals.find(g => g.id === task.goal_id)
+      if (goal) {
+        return parseISO(goal.end_date)
+      }
+    }
+    // If no goal is associated, use a default end date (e.g., 1 year from task start)
+    const taskStartDate = parseISO(task.date)
+    return addDays(taskStartDate, 365)
+  }
+
   const generateEvents = (): CalendarEvent[] => {
     const events: CalendarEvent[] = []
-    const start = startOfMonth(currentDate)
-    const end = endOfMonth(currentDate)
-    const daysInMonth = eachDayOfInterval({ start, end })
+    const tasksByDate: { [key: string]: Task[] } = {}
+    const today = startOfDay(new Date())
 
-    // Add milestones first
+    // Process tasks and create recurring instances
+    tasks.forEach(task => {
+      // Use local state for completion status if available
+      const isCompleted = localTaskStates[task.id] ?? task.completed
+      const taskWithLocalState = { ...task, completed: isCompleted }
+      
+      const taskStartDate = startOfDay(parseISO(task.date))
+      const endDate = getTaskEndDate(task, goals)
+      
+      // Only process if the task hasn't ended
+      if (!isAfter(today, endDate)) {
+        if (task.type === 'daily') {
+          const dates = eachDayOfInterval({ 
+            start: isAfter(today, taskStartDate) ? today : taskStartDate,
+            end: endDate 
+          })
+          dates.forEach(date => {
+            const dateKey = date.toISOString().split('T')[0]
+            if (!tasksByDate[dateKey]) {
+              tasksByDate[dateKey] = []
+            }
+            tasksByDate[dateKey].push({ ...taskWithLocalState, date: date.toISOString() })
+          })
+        } else if (task.type === 'weekly' && typeof task.weekday === 'number') {
+          let currentDate = isAfter(today, taskStartDate) ? today : taskStartDate
+          while (isBefore(currentDate, endDate)) {
+            if (getDay(currentDate) === task.weekday) {
+              const dateKey = currentDate.toISOString().split('T')[0]
+              if (!tasksByDate[dateKey]) {
+                tasksByDate[dateKey] = []
+              }
+              tasksByDate[dateKey].push({ ...taskWithLocalState, date: currentDate.toISOString() })
+            }
+            currentDate = addDays(currentDate, 1)
+          }
+        } else {
+          // Custom (one-time) tasks
+          if (!isBefore(parseISO(task.date), today)) {
+            const dateKey = task.date.split('T')[0]
+            if (!tasksByDate[dateKey]) {
+              tasksByDate[dateKey] = []
+            }
+            tasksByDate[dateKey].push(taskWithLocalState)
+          }
+        }
+      }
+    })
+
+    // Add milestones first (they'll appear at the top)
     goals.forEach(goal => {
       goal.milestones?.forEach(milestone => {
-        const milestoneDate = new Date(milestone.date)
-        if (isSameDay(milestoneDate, start) || isSameDay(milestoneDate, end) || (milestoneDate > start && milestoneDate < end)) {
+        if (!isBefore(parseISO(milestone.date), today)) {
           events.push({
             id: milestone.id,
             title: milestone.title,
-            start: milestoneDate,
-            end: milestoneDate,
+            start: milestone.date,
             allDay: true,
-            resource: {
+            backgroundColor: 'hsl(var(--primary) / 0.1)',
+            borderColor: 'hsl(var(--primary))',
+            textColor: 'hsl(var(--primary))',
+            display: 'block',
+            classNames: ['calendar-milestone'],
+            extendedProps: {
               type: 'milestone',
               goalId: goal.id,
               goalTitle: goal.title,
@@ -96,73 +154,24 @@ export default function CalendarPage() {
       })
     })
 
-    // Add daily tasks
-    daysInMonth.forEach(date => {
-      const dailyTasks = tasks.filter(task => task.type === 'daily')
-      dailyTasks.forEach(task => {
-        const goal = goals.find(g => g.id === task.goal_id)
-        events.push({
-          id: `${task.id}-${date.toISOString()}`,
-          title: task.title,
-          start: date,
-          end: date,
-          allDay: true,
-          resource: {
-            type: 'daily',
-            goalId: task.goal_id,
-            goalTitle: goal?.title,
-            goalColor: goal?.color,
-            completed: task.completed
-          }
-        })
-      })
-    })
-
-    // Add weekly tasks
-    daysInMonth.forEach(date => {
-      const weeklyTasks = tasks.filter(task => task.type === 'weekly' && typeof task.weekday === 'number')
-      weeklyTasks.forEach(task => {
-        if (date.getDay() === task.weekday) {
-          const goal = goals.find(g => g.id === task.goal_id)
-          events.push({
-            id: `${task.id}-${date.toISOString()}`,
-            title: task.title,
-            start: date,
-            end: date,
-            allDay: true,
-            resource: {
-              type: 'weekly',
-              goalId: task.goal_id,
-              goalTitle: goal?.title,
-              goalColor: goal?.color,
-              completed: task.completed
-            }
-          })
+    // Add task count events
+    Object.entries(tasksByDate).forEach(([date, dateTasks]) => {
+      const completedCount = dateTasks.filter(t => t.completed).length
+      events.push({
+        id: `tasks-${date}`,
+        title: `${completedCount}/${dateTasks.length} Tasks`,
+        start: date,
+        allDay: true,
+        backgroundColor: 'hsl(var(--primary) / 0.1)',
+        borderColor: 'hsl(var(--primary))',
+        textColor: 'hsl(var(--primary))',
+        display: 'block',
+        classNames: ['calendar-tasks'],
+        extendedProps: {
+          type: 'task-count',
+          tasks: dateTasks
         }
       })
-    })
-
-    // Add custom tasks
-    const customTasks = tasks.filter(task => task.type === 'custom' as TaskType)
-    customTasks.forEach(task => {
-      const taskDate = new Date(task.date)
-      if (isSameDay(taskDate, start) || isSameDay(taskDate, end) || (taskDate > start && taskDate < end)) {
-        const goal = goals.find(g => g.id === task.goal_id)
-        events.push({
-          id: task.id,
-          title: task.title,
-          start: taskDate,
-          end: taskDate,
-          allDay: true,
-          resource: {
-            type: 'custom',
-            goalId: task.goal_id,
-            goalTitle: goal?.title,
-            goalColor: goal?.color,
-            completed: task.completed
-          }
-        })
-      }
     })
 
     return events
@@ -180,7 +189,8 @@ export default function CalendarPage() {
           date: selectedDate.toISOString(),
           goal_id: newTaskGoalId === "no-goal" ? null : newTaskGoalId,
           completed: false,
-          user_id: user.id
+          user_id: user.id,
+          weekday: newTaskType === 'weekly' ? selectedDate.getDay() : null
         }])
         .select()
         .single()
@@ -199,59 +209,63 @@ export default function CalendarPage() {
     }
   }
 
-  const EventComponent = ({ event }: { event: CalendarEvent }) => {
-    const { type, goalId, goalTitle, goalColor, completed } = event.resource
-    
-    // Milestone styling
-    if (type === 'milestone') {
-      return (
-        <div className="flex items-center gap-2 p-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-          <Target className="h-3 w-3" />
-          <span className="font-medium">{event.title}</span>
-          {goalId && (
-            <Badge 
-              variant="outline" 
-              className="ml-auto border-primary-foreground text-primary-foreground"
-            >
-              {goalTitle}
-            </Badge>
-          )}
-        </div>
-      )
+  const handleEventClick = (info: any) => {
+    const event = info.event
+    if (event.extendedProps.type === 'task-count') {
+      setSelectedTasks(event.extendedProps.tasks)
+      setIsTaskListOpen(true)
     }
-
-    // Regular task styling
-    return (
-      <div className={`flex items-center gap-2 p-1 rounded-md hover:bg-accent transition-colors ${
-        completed ? 'opacity-50' : ''
-      }`}>
-        <span className={completed ? 'line-through' : ''}>{event.title}</span>
-        <div className="flex gap-1 ml-auto">
-          {goalId && (
-            <Badge 
-              variant="outline" 
-              style={{ 
-                borderColor: goalColor,
-                color: goalColor
-              }}
-            >
-              {goalTitle}
-            </Badge>
-          )}
-          <Badge variant="secondary" className="capitalize">
-            {type}
-          </Badge>
-        </div>
-      </div>
-    )
   }
 
-  const handleNavigate = (newDate: Date) => {
-    setCurrentDate(newDate)
-  }
+  const handleTaskCompletion = async (taskId: string, currentCompleted: boolean) => {
+    try {
+      // Update local state immediately
+      setLocalTaskStates(prev => ({
+        ...prev,
+        [taskId]: !currentCompleted
+      }))
 
-  const handleViewChange = (newView: View) => {
-    setView(newView)
+      // Update selected tasks to reflect the change immediately
+      setSelectedTasks(prev => 
+        prev.map(task => 
+          task.id === taskId 
+            ? { ...task, completed: !currentCompleted }
+            : task
+        )
+      )
+
+      // Update in database
+      const { error } = await supabase
+        .from('tasks')
+        .update({ completed: !currentCompleted })
+        .eq('id', taskId)
+
+      if (error) throw error
+
+      // Close the dialog
+      setIsTaskListOpen(false)
+
+      // Refresh goals in the background
+      refreshGoals()
+
+      // Show success message
+      toast.success('Task updated successfully')
+    } catch (error) {
+      // Revert local state on error
+      setLocalTaskStates(prev => ({
+        ...prev,
+        [taskId]: currentCompleted
+      }))
+      setSelectedTasks(prev => 
+        prev.map(task => 
+          task.id === taskId 
+            ? { ...task, completed: currentCompleted }
+            : task
+        )
+      )
+      console.error('Error updating task:', error)
+      toast.error('Failed to update task')
+    }
   }
 
   if (isLoading) {
@@ -278,7 +292,7 @@ export default function CalendarPage() {
             <DialogHeader>
               <DialogTitle>Add New Task</DialogTitle>
               <DialogDescription>
-                Create a new task for {format(selectedDate, 'MMMM d, yyyy')}
+                Create a new task
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -295,7 +309,7 @@ export default function CalendarPage() {
                 <Label htmlFor="type">Task Type</Label>
                 <Select
                   value={newTaskType}
-                  onValueChange={(value: 'daily' | 'weekly' | 'custom') => setNewTaskType(value)}
+                  onValueChange={(value: TaskType) => setNewTaskType(value)}
                 >
                   <SelectTrigger id="type">
                     <SelectValue placeholder="Select task type" />
@@ -335,29 +349,86 @@ export default function CalendarPage() {
       </div>
 
       <Card className="p-4">
-        <BigCalendar
-          localizer={localizer}
+        <FullCalendar
+          plugins={[dayGridPlugin, interactionPlugin]}
+          initialView="dayGridMonth"
           events={generateEvents()}
-          startAccessor="start"
-          endAccessor="end"
-          style={{ height: 'calc(100vh - 250px)' }}
-          components={{
-            event: EventComponent
+          headerToolbar={{
+            left: 'prev',
+            center: 'title',
+            right: 'next'
           }}
-          date={currentDate}
-          onNavigate={handleNavigate}
-          view={view}
-          onView={handleViewChange}
-          onSelectSlot={({ start }) => {
-            setSelectedDate(new Date(start))
+          height="calc(100vh - 250px)"
+          dateClick={(info) => {
+            setSelectedDate(info.date)
             setIsDialogOpen(true)
           }}
-          selectable
-          popup
-          views={['month', 'week', 'day']}
-          className="rounded-md"
+          eventClick={handleEventClick}
+          eventContent={(eventInfo) => {
+            const event = eventInfo.event
+            const type = event.extendedProps.type
+
+            if (type === 'task-count') {
+              return (
+                <div className="flex items-center justify-center p-1 w-full h-full rounded-md bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer">
+                  <span className="font-medium text-primary">{event.title}</span>
+                </div>
+              )
+            }
+
+            if (type === 'milestone') {
+              return (
+                <div className="flex items-center gap-2 p-1 rounded-md bg-primary text-primary-foreground">
+                  <Target className="h-3 w-3" />
+                  <span className="font-medium">{event.title}</span>
+                </div>
+              )
+            }
+
+            return <div>{event.title}</div>
+          }}
         />
       </Card>
+
+      <Dialog open={isTaskListOpen} onOpenChange={setIsTaskListOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tasks</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedTasks.map(task => {
+              const goal = goals.find(g => g.id === task.goal_id)
+              const isCompleted = localTaskStates[task.id] ?? task.completed
+              return (
+                <div key={task.id} className="flex items-center justify-between gap-4 p-2 rounded-lg border">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={isCompleted}
+                      className="rounded border-primary text-primary focus:ring-primary"
+                      onChange={() => handleTaskCompletion(task.id, isCompleted)}
+                    />
+                    <span className={isCompleted ? 'line-through text-muted-foreground' : ''}>
+                      {task.title}
+                    </span>
+                  </div>
+                  {goal && (
+                    <Badge
+                      variant="outline"
+                      style={{
+                        borderColor: goal.color,
+                        color: goal.color
+                      }}
+                    >
+                      {goal.title}
+                    </Badge>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 
