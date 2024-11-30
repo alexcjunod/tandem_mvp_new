@@ -3,7 +3,6 @@
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
-import Image from "next/image"
 import Link from "next/link"
 import { SignInButton, SignUpButton } from "@clerk/nextjs"
 
@@ -26,25 +25,17 @@ export default function HomePage() {
     return (
       <>
         {/* Mobile Layout */}
-        <div className="md:hidden min-h-screen bg-background relative">
-          <>
-            <Image
-              src="/hero-mobile.jpg"
-              alt="Tandem App"
-              fill
-              style={{ objectFit: 'cover' }}
-              priority
-              className="block dark:hidden"
-            />
-            <Image
-              src="/hero-mobile-dark.jpg"
-              alt="Tandem App"
-              fill
-              style={{ objectFit: 'cover' }}
-              priority
-              className="hidden dark:block"
-            />
-          </>
+        <div 
+          className="md:hidden min-h-screen relative bg-cover bg-center"
+          style={{ 
+            backgroundImage: `url('/hero-mobile.jpg')`,
+            backgroundColor: 'purple' // Fallback color
+          }}
+        >
+          {/* Semi-transparent overlay */}
+          <div className="absolute inset-0 bg-black/40" />
+          
+          {/* Content */}
           <div className="relative z-10 flex min-h-screen flex-col items-center justify-center p-6">
             <div className="w-full max-w-sm space-y-6">
               <div className="flex flex-col space-y-2 text-center">
