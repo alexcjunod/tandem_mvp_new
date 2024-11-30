@@ -15,11 +15,103 @@ import { useGoals } from "@/hooks/use-goals"
 import { toast } from "sonner"
 import { Progress } from "@/components/ui/progress"
 
-const popularGoals = [
-  { id: "quit-smoking", title: "Stop Smoking", icon: Cigarette },
-  { id: "run-marathon", title: "Run a Marathon", icon: Timer },
+interface Task {
+  title: string
+  type: "daily" | "weekly" | "custom"
+  weekday?: number // 0-6 for Sunday-Saturday
+}
+
+interface PresetGoal {
+  id: string
+  title: string
+  icon: any
+  smart_goal: {
+    specific: string
+    measurable: string
+    achievable: string
+    relevant: string
+    timeBound: string
+  }
+  tasks: Task[]
+  milestones: {
+    title: string
+    date: string
+  }[]
+}
+
+interface SimpleGoal {
+  id: string
+  title: string
+  icon: any
+}
+
+const popularGoals: (PresetGoal | SimpleGoal)[] = [
+  { 
+    id: "marathon-sub-430", 
+    title: "Complete a Marathon in Under 4:30",
+    icon: Timer,
+    smart_goal: {
+      specific: "Follow a 16-week training plan to complete a marathon in under 4 hours and 30 minutes.",
+      measurable: "Track daily runs, distances, and paces using a running app or GPS watch.",
+      achievable: "Train consistently with a mix of easy runs, long runs, speed work, and rest days.",
+      relevant: "Achieving this goal will improve endurance and personal fitness.",
+      timeBound: "Complete the marathon 16 weeks from the start of the training plan."
+    },
+    tasks: [
+      // Daily tasks for tracking and preparation
+      { title: "Log today's run details (distance, pace, effort)", type: "daily" },
+      { title: "Check tomorrow's training plan", type: "daily" },
+      { title: "Post-run stretching routine", type: "daily" },
+      { title: "Prepare running gear for tomorrow", type: "daily" },
+      
+      // Weekly schedule based on Runner's World Sub-4:30 plan
+      { title: "Easy Run (45-60 mins)", type: "weekly", weekday: 1 }, // Monday
+      { title: "Speed Work: Intervals/Tempo", type: "weekly", weekday: 2 }, // Tuesday
+      { title: "Schedule: Rest Day", type: "weekly", weekday: 3 }, // Wednesday
+      { title: "Mid-Week Long Run", type: "weekly", weekday: 4 }, // Thursday
+      { title: "Easy Run or Cross-Train", type: "weekly", weekday: 5 }, // Friday
+      { title: "Schedule: Rest Day", type: "weekly", weekday: 6 }, // Saturday
+      { title: "Long Run", type: "weekly", weekday: 0 }, // Sunday
+      
+      // Weekly planning tasks
+      { title: "Plan next week's routes", type: "weekly", weekday: 6 }, // Saturday
+      { title: "Review weekly progress", type: "weekly", weekday: 6 }, // Saturday
+      { title: "Check gear condition", type: "weekly", weekday: 6 } // Saturday
+    ],
+    milestones: [
+      { title: "Complete 10-mile Long Run", date: "+21" },
+      { title: "Complete 15-mile Long Run", date: "+42" },
+      { title: "Complete 20-mile Long Run", date: "+63" },
+      { title: "Begin Tapering Phase", date: "+84" },
+      { title: "Race Day: Marathon", date: "+112" }
+    ]
+  } as PresetGoal,
+  { 
+    id: "quit-smoking-goal", 
+    title: "Stop Smoking",
+    icon: Cigarette,
+    smart_goal: {
+      specific: "Quit smoking entirely by gradually reducing cigarette use.",
+      measurable: "Track the number of cigarettes smoked daily and aim for zero by the target date.",
+      achievable: "Use nicotine replacement therapy (NRT) and support groups.",
+      relevant: "Improve health, save money, and enhance quality of life.",
+      timeBound: "Quit smoking within 8 weeks."
+    },
+    tasks: [
+      { title: "Track daily cigarette count", type: "daily", weekday: 0 },
+      { title: "Replace one cigarette with NRT daily", type: "daily", weekday: 0 },
+      { title: "Join a support group or app", type: "weekly", weekday: 3 }, // Wednesday
+      { title: "Practice stress management techniques", type: "daily", weekday: 0 }
+    ],
+    milestones: [
+      { title: "Reduce smoking by 50%", date: "+14" },
+      { title: "Switch to NRT for all cravings", date: "+28" },
+      { title: "Smoke-free for 1 week", date: "+49" },
+      { title: "Smoke-free for 1 month", date: "+63" }
+    ]
+  } as PresetGoal,
   { id: "manual", title: "Create Manual Goal", icon: Target },
-  { id: "custom", title: "Create Custom Goal (AI)", icon: Plus },
+  { id: "custom", title: "Create Custom Goal (AI)", icon: Plus }
 ]
 
 export default function OnboardingFlow() {
@@ -49,11 +141,31 @@ export default function OnboardingFlow() {
   const handleGoalSelect = (goalId: string) => {
     setSelectedGoal(goalId)
     if (goalId === "custom") {
-      setStep(3) // Move to custom goal creation
+      setStep(3)
     } else if (goalId === "manual") {
-      setStep(2) // Move to manual goal form
+      setStep(2)
     } else {
-      setStep(2) // Move to pre-defined goal details
+      const selectedGoalData = popularGoals.find(g => g.id === goalId) as PresetGoal
+      if (selectedGoalData && 'smart_goal' in selectedGoalData) {
+        const today = new Date()
+        setManualGoal({
+          ...manualGoal,
+          title: selectedGoalData.title,
+          start_date: today.toISOString().split('T')[0],
+          smart_goal: selectedGoalData.smart_goal,
+          initialTasks: selectedGoalData.tasks.map(task => ({
+            title: task.title,
+            type: task.type,
+            weekday: task.weekday
+          })),
+          initialMilestones: selectedGoalData.milestones.map(m => ({
+            title: m.title,
+            date: new Date(today.getTime() + parseInt(m.date.slice(1)) * 24 * 60 * 60 * 1000)
+              .toISOString().split('T')[0]
+          }))
+        })
+      }
+      setStep(2)
     }
   }
 
@@ -117,14 +229,18 @@ export default function OnboardingFlow() {
     },
     reasoning: "",
     color: "#000000",
-    initialTasks: [{ title: "", type: "daily" as "daily" | "weekly" | "custom" }],
+    initialTasks: [{ 
+      title: "", 
+      type: "daily" as "daily" | "weekly" | "custom",
+      weekday: 0 
+    }],
     initialMilestones: [{ title: "", date: "" }]
   })
 
   const handleAddTask = () => {
     setManualGoal(prev => ({
       ...prev,
-      initialTasks: [...prev.initialTasks, { title: "", type: "daily" as "daily" | "weekly" | "custom" }]
+      initialTasks: [...prev.initialTasks, { title: "", type: "daily" as "daily" | "weekly" | "custom", weekday: 0 }]
     }))
   }
 
@@ -171,13 +287,24 @@ export default function OnboardingFlow() {
         // Create initial tasks
         for (const task of manualGoal.initialTasks) {
           if (task.title.trim()) {
+            let taskDate = new Date()
+            
+            // For weekly tasks, set the correct day of the week
+            if (task.type === 'weekly' && typeof task.weekday === 'number') {
+              // Get the next occurrence of this weekday
+              const currentDay = taskDate.getDay()
+              const daysUntilNext = (task.weekday - currentDay + 7) % 7
+              taskDate.setDate(taskDate.getDate() + daysUntilNext)
+            }
+
             const { error: taskError } = await supabase
               .from('tasks')
               .insert({
                 title: task.title,
                 type: task.type,
                 completed: false,
-                date: new Date().toISOString(),
+                date: taskDate.toISOString(),
+                weekday: task.type === 'weekly' ? task.weekday : null,
                 goal_id: goal.id,
                 user_id: user.id
               })
@@ -453,27 +580,69 @@ export default function OnboardingFlow() {
         return selectedGoal === "manual" ? renderManualGoalForm() : (
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-center">
-              {selectedGoal === "quit-smoking" ? "Stop Smoking" : "Run a Marathon"}
+              {selectedGoal === "quit-smoking-goal" ? "Stop Smoking" : "Marathon Training Plan"}
             </h2>
             <Card>
               <CardContent className="pt-6">
                 <form className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="start-date">Start Date</Label>
-                    <Input type="date" id="start-date" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="end-date">Target End Date</Label>
-                    <Input type="date" id="end-date" />
+                    <Label htmlFor="end-date">Target Race Date</Label>
+                    {selectedGoal === "marathon-sub-430" && (
+                      <div className="text-sm text-muted-foreground mb-2">
+                        <p>💡 Based on Runner's World training plans, we recommend selecting a race date that's:</p>
+                        <ul className="list-disc list-inside mt-1 ml-2">
+                          <li>At least 16 weeks from today (for proper training)</li>
+                          <li>During cooler months (Spring/Fall) for optimal performance</li>
+                          <li>A Saturday or Sunday (most marathons are on weekends)</li>
+                        </ul>
+                      </div>
+                    )}
+                    <Input 
+                      type="date" 
+                      id="end-date"
+                      value={manualGoal.end_date}
+                      min={new Date(Date.now() + 16 * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        const selectedGoalData = popularGoals.find(g => g.id === selectedGoal) as PresetGoal
+                        if (selectedGoalData && 'smart_goal' in selectedGoalData) {
+                          const today = new Date()
+                          setManualGoal({
+                            ...manualGoal,
+                            title: selectedGoalData.title,
+                            start_date: today.toISOString().split('T')[0],
+                            end_date: e.target.value,
+                            smart_goal: selectedGoalData.smart_goal,
+                            initialTasks: selectedGoalData.tasks.map(task => ({
+                              title: task.title,
+                              type: task.type,
+                              weekday: task.weekday || 0
+                            })),
+                            initialMilestones: selectedGoalData.milestones.map(m => ({
+                              title: m.title,
+                              date: new Date(today.getTime() + parseInt(m.date.slice(1)) * 24 * 60 * 60 * 1000)
+                                .toISOString().split('T')[0]
+                            }))
+                          })
+                        }
+                      }}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="motivation">What's your primary motivation?</Label>
-                    <Textarea id="motivation" placeholder="I want to improve my health..." />
+                    <Textarea 
+                      id="motivation"
+                      value={manualGoal.reasoning}
+                      onChange={(e) => setManualGoal(prev => ({ 
+                        ...prev, 
+                        reasoning: e.target.value 
+                      }))}
+                      placeholder="What inspired you to take on this marathon challenge?"
+                    />
                   </div>
                 </form>
               </CardContent>
               <CardFooter>
-                <Button className="w-full" onClick={() => setStep(4)}>Set Goal</Button>
+                <Button className="w-full" onClick={handleManualGoalSubmit}>Set Goal</Button>
               </CardFooter>
             </Card>
           </div>
@@ -543,7 +712,7 @@ export default function OnboardingFlow() {
                 <p className="text-lg mb-4">
                   Congratulations on setting your goal! You're one step closer to achieving it.
                 </p>
-                <Button className="w-full" onClick={() => console.log("Navigate to dashboard")}>
+                <Button className="w-full" onClick={() => router.push('/dashboard')}>
                   Go to Dashboard
                 </Button>
               </CardContent>
