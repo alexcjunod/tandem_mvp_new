@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { useUser } from "@clerk/nextjs"
 import { supabase } from "@/lib/supabase/client"
-import 'react-big-calendar/lib/css/react-big-calendar.css'
+import './calendar.css'
 
 const locales = {
   'en-US': require('date-fns/locale/en-US')
