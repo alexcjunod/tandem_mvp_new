@@ -6,7 +6,6 @@ import {
   NameType,
   ValueType,
 } from "recharts/types/component/DefaultTooltipContent"
-import { Goal } from "@/types/goals"
 
 export type ChartConfig = {
   [key: string]: {
@@ -36,15 +35,18 @@ export function ChartContainer({
 
 interface ChartTooltipProps<TData extends ValueType, TName extends NameType>
   extends TooltipProps<TData, TName> {
-  hideLabel?: boolean
-  nameKey?: string
+  indicator?: "dot" | "line"
+  valueFormatter?: (value: number) => string
+  labelFormatter?: (value: string | number) => string
 }
 
-export function CustomTooltip<TData extends ValueType, TName extends NameType>({
+export function ChartTooltip<TData extends ValueType, TName extends NameType>({
   active,
   payload,
-  hideLabel = false,
-  nameKey = "name",
+  label,
+  indicator = "dot",
+  valueFormatter = (value) => `${value}`,
+  labelFormatter = (value) => `${value}`,
 }: ChartTooltipProps<TData, TName>) {
   if (!active || !payload) {
     return null
@@ -53,21 +55,32 @@ export function CustomTooltip<TData extends ValueType, TName extends NameType>({
   return (
     <div className="rounded-lg border bg-background p-2 shadow-sm">
       <div className="grid gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm text-muted-foreground">
+            {labelFormatter(label)}
+          </span>
+        </div>
         {payload.map((item, index) => (
-          <div key={index} className="flex items-center justify-between gap-2">
+          <div key={index} className="flex items-center justify-between gap-8">
             <div className="flex items-center gap-2">
-              <div
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: item.color }}
-              />
-              {!hideLabel && (
-                <span className="text-sm text-muted-foreground">
-                  {item.payload[nameKey]}
-                </span>
+              {indicator === "dot" && (
+                <div
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: item.color }}
+                />
               )}
+              {indicator === "line" && (
+                <div
+                  className="h-0.5 w-3"
+                  style={{ backgroundColor: item.color }}
+                />
+              )}
+              <span className="text-sm font-medium">
+                {item.dataKey}
+              </span>
             </div>
-            <span className="text-sm font-medium">
-              {item.value}%
+            <span className="text-sm text-muted-foreground">
+              {valueFormatter(item.value as number)}
             </span>
           </div>
         ))}
@@ -76,17 +89,67 @@ export function CustomTooltip<TData extends ValueType, TName extends NameType>({
   )
 }
 
-export function calculateGoalProgress(goal: Goal): number {
-  if (!goal.tasks || goal.tasks.length === 0) {
-    return 0;
+export function ChartLegend({ content }: { content: ReactElement }) {
+  return content
+}
+
+export function ChartLegendContent() {
+  return (
+    <div className="flex gap-4">
+      {/* Add legend content here if needed */}
+    </div>
+  )
+}
+
+export function ChartTooltipContent({
+  active,
+  payload,
+  label,
+  valueFormatter,
+  labelFormatter,
+  indicator,
+}: TooltipProps<ValueType, NameType> & {
+  valueFormatter?: (value: number) => string
+  labelFormatter?: (value: string | number) => string
+  indicator?: "dot" | "line"
+}) {
+  if (!active || !payload) {
+    return null
   }
 
-  // Only consider daily tasks
-  const dailyTasks = goal.tasks.filter((task) => task.type === 'daily');
-  if (dailyTasks.length === 0) {
-    return 0;
-  }
-
-  const completedTasks = dailyTasks.filter((task) => task.completed).length;
-  return Math.round((completedTasks / dailyTasks.length) * 100);
+  return (
+    <div className="rounded-lg border bg-background p-2 shadow-sm">
+      <div className="grid gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm text-muted-foreground">
+            {labelFormatter ? labelFormatter(label) : label}
+          </span>
+        </div>
+        {payload.map((item, index) => (
+          <div key={index} className="flex items-center justify-between gap-8">
+            <div className="flex items-center gap-2">
+              {indicator === "dot" && (
+                <div
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: item.color }}
+                />
+              )}
+              {indicator === "line" && (
+                <div
+                  className="h-0.5 w-3"
+                  style={{ backgroundColor: item.color }}
+                />
+              )}
+              <span className="text-sm font-medium">
+                {item.name || item.dataKey}
+              </span>
+            </div>
+            <span className="text-sm text-muted-foreground">
+              {valueFormatter ? valueFormatter(item.value as number) : item.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 } 

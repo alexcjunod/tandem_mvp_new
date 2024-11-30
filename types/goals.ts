@@ -26,11 +26,11 @@ export interface Goal {
 export interface Task {
   id: string
   title: string
+  type: 'daily' | 'weekly' | 'custom'
   completed: boolean
   date: string
-  goal_id: string
-  type: 'daily' | 'weekly' | 'custom'
   weekday?: number
+  goal_id?: string
   user_id: string
 }
 

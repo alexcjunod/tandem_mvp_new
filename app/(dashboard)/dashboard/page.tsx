@@ -210,8 +210,20 @@ function TaskItem({ task, onToggle, goals }: TaskItemProps) {
 // Add this helper function to calculate daily progress
 const calculateDailyProgress = (tasks: Task[]) => {
   if (!tasks || tasks.length === 0) return 0;
-  const completedTasks = tasks.filter(t => t.completed).length;
-  return Math.round((completedTasks / tasks.length) * 100);
+  
+  const today = new Date();
+  const currentDayOfWeek = today.getDay();
+  
+  // Filter for daily tasks and weekly tasks that are due today
+  const todaysTasks = tasks.filter(task => 
+    task.type === 'daily' || 
+    (task.type === 'weekly' && task.weekday === currentDayOfWeek)
+  );
+  
+  if (todaysTasks.length === 0) return 0;
+  
+  const completedTasks = todaysTasks.filter(t => t.completed).length;
+  return Math.round((completedTasks / todaysTasks.length) * 100);
 };
 
 // Add this color scheme array

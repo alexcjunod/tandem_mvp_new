@@ -3,7 +3,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useUser } from "@clerk/nextjs"
 import { toast } from 'sonner'
 import { Goal, Task, Milestone, Reflection, Resource } from '@/types'
-import { startOfDay, isAfter, parseISO } from 'date-fns'
+import { startOfDay, isAfter, parseISO, format } from 'date-fns'
 
 export function useGoals() {
   const { user } = useUser()
@@ -14,7 +14,7 @@ export function useGoals() {
   const supabase = createClientComponentClient()
 
   const getTaskCompletionKey = (taskId: string, date: Date = new Date()) => {
-    return `${taskId}-${startOfDay(date).toISOString().split('T')[0]}`
+    return `${taskId}-${format(date, 'yyyy-MM-dd')}`
   }
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export function useGoals() {
       if (tasksError) throw tasksError;
 
       // Fetch task completions for today
-      const today = startOfDay(new Date()).toISOString().split('T')[0];
+      const today = format(new Date(), 'yyyy-MM-dd');
       const { data: completions, error: completionsError } = await supabase
         .from('task_completions')
         .select('*')
@@ -65,7 +65,8 @@ export function useGoals() {
 
       // Create a map of task completions
       const completionMap = completions?.reduce((acc, completion) => {
-        acc[getTaskCompletionKey(completion.task_id)] = completion.completed;
+        const key = getTaskCompletionKey(completion.task_id);
+        acc[key] = completion.completed;
         return acc;
       }, {} as {[key: string]: boolean});
 
@@ -163,19 +164,62 @@ export function useGoals() {
     }
   }
 
+  const updateDailyStats = async (goalId: string) => {
+    if (!user) return;
+
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) return;
+
+    const today = startOfDay(new Date()).toISOString().split('T')[0];
+    const dayOfWeek = new Date().getDay();
+
+    // Get all tasks for this goal
+    const goalTasks = goal.tasks || [];
+    
+    // Get daily tasks
+    const dailyTasks = goalTasks.filter(t => t.type === 'daily');
+    const completedDailyTasks = dailyTasks.filter(t => t.completed);
+
+    // Get weekly tasks for today
+    const weeklyTasks = goalTasks.filter(t => 
+      t.type === 'weekly' && t.weekday === dayOfWeek
+    );
+    const completedWeeklyTasks = weeklyTasks.filter(t => t.completed);
+
+    try {
+      await supabase
+        .from('daily_task_stats')
+        .upsert({
+          user_id: user.id,
+          goal_id: goalId,
+          date: today,
+          daily_tasks_completed: completedDailyTasks.length,
+          daily_tasks_total: dailyTasks.length,
+          weekly_tasks_completed: completedWeeklyTasks.length,
+          weekly_tasks_total: weeklyTasks.length
+        }, {
+          onConflict: 'user_id,goal_id,date'
+        });
+    } catch (error) {
+      console.error('Error updating daily stats:', error);
+    }
+  };
+
   const updateGoalTask = async (taskId: string, updates: Partial<Task>) => {
     try {
       const task = tasks.find(t => t.id === taskId);
       if (!task) throw new Error('Task not found');
 
       if (task.type === 'daily' || task.type === 'weekly') {
-        // For recurring tasks, update the completion for today
-        const today = startOfDay(new Date()).toISOString().split('T')[0];
+        const now = new Date();
+        const localDate = format(now, 'yyyy-MM-dd');
+        
+        // First update the task completion in the database
         const { error: completionError } = await supabase
           .from('task_completions')
           .upsert({
             task_id: taskId,
-            completion_date: today,
+            completion_date: localDate,
             completed: Boolean(updates.completed),
             user_id: user?.id
           }, {
@@ -185,6 +229,11 @@ export function useGoals() {
 
         if (completionError) throw completionError;
 
+        // Update stats if needed
+        if (task.goal_id) {
+          await updateDailyStats(task.goal_id);
+        }
+
         // Update local state
         const completionKey = getTaskCompletionKey(taskId);
         setTaskCompletions(prev => ({
@@ -192,30 +241,32 @@ export function useGoals() {
           [completionKey]: Boolean(updates.completed)
         }));
 
-        // Update tasks state to reflect the change
+        // Update tasks state
         setTasks(prevTasks =>
           prevTasks.map(t => {
-            if (t.id === taskId && (t.type === 'daily' || t.type === 'weekly')) {
+            if (t.id === taskId) {
               return { ...t, completed: Boolean(updates.completed) };
             }
             return t;
           })
         );
 
-        // Update goals state to reflect the change
+        // Update goals state
         setGoals(prevGoals =>
           prevGoals.map(goal => ({
             ...goal,
             tasks: goal.tasks?.map(t => {
-              if (t.id === taskId && (t.type === 'daily' || t.type === 'weekly')) {
+              if (t.id === taskId) {
                 return { ...t, completed: Boolean(updates.completed) };
               }
               return t;
             })
           }))
         );
+
+        return true;
       } else {
-        // For one-time tasks, update the task directly
+        // Keep existing one-time task logic
         const { error } = await supabase
           .from('tasks')
           .update({ completed: Boolean(updates.completed) })
@@ -223,7 +274,6 @@ export function useGoals() {
 
         if (error) throw error;
 
-        // Update local state for one-time tasks
         setTasks(prevTasks =>
           prevTasks.map(t => {
             if (t.id === taskId) {

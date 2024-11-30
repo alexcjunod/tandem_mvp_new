@@ -67,11 +67,9 @@ export default function CalendarPage() {
       // Add daily tasks
       tasks.forEach(task => {
         if (task.type === 'daily') {
-          // Create a projected task for this day
           const projectedTask = {
             ...task,
             date: dateKey,
-            // Only keep completed status if it's the original task's date
             completed: isSameDay(parseISO(task.date), currentDate) ? task.completed : false
           }
           tasksForDay.push(projectedTask)
@@ -81,11 +79,9 @@ export default function CalendarPage() {
       // Add weekly tasks that match the current day of week
       tasks.forEach(task => {
         if (task.type === 'weekly' && task.weekday === dayOfWeek) {
-          // Create a projected task for this day
           const projectedTask = {
             ...task,
             date: dateKey,
-            // Only keep completed status if it's the original task's date
             completed: isSameDay(parseISO(task.date), currentDate) ? task.completed : false
           }
           tasksForDay.push(projectedTask)
@@ -93,12 +89,9 @@ export default function CalendarPage() {
       })
 
       if (tasksForDay.length > 0) {
-        const dailyTasks = tasksForDay.filter(t => t.type === 'daily')
-        const weeklyTasks = tasksForDay.filter(t => t.type === 'weekly')
-        const title = [
-          dailyTasks.length > 0 ? `${dailyTasks.filter(t => t.completed).length}/${dailyTasks.length} Daily` : null,
-          weeklyTasks.length > 0 ? `${weeklyTasks.filter(t => t.completed).length}/${weeklyTasks.length} Weekly` : null
-        ].filter(Boolean).join(', ')
+        const completedTasks = tasksForDay.filter(t => t.completed).length
+        const totalTasks = tasksForDay.length
+        const title = `${completedTasks}/${totalTasks} Tasks`
 
         events.push({
           id: `tasks-${dateKey}`,
