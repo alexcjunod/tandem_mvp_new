@@ -5,6 +5,23 @@ import { toast } from 'sonner'
 import { Goal, Task, Milestone, Reflection, Resource } from '@/types'
 import { startOfDay, isAfter, parseISO, format } from 'date-fns'
 
+const getRandomColor = () => {
+  // Array of pleasant, accessible colors (avoiding black)
+  const colors = [
+    'hsl(10, 80%, 60%)',    // Coral Red
+    'hsl(200, 70%, 50%)',   // Blue
+    'hsl(150, 60%, 40%)',   // Green
+    'hsl(280, 60%, 60%)',   // Purple
+    'hsl(40, 90%, 50%)',    // Orange
+    'hsl(170, 70%, 45%)',   // Teal
+    'hsl(320, 70%, 55%)',   // Pink
+    'hsl(60, 80%, 45%)',    // Yellow
+    'hsl(230, 60%, 50%)',   // Indigo
+    'hsl(100, 65%, 45%)',   // Lime
+  ];
+  return colors[Math.floor(Math.random() * colors.length)];
+};
+
 export function useGoals() {
   const { user } = useUser()
   const [goals, setGoals] = useState<Goal[]>([])
@@ -104,9 +121,16 @@ export function useGoals() {
     if (!user) return null
     
     try {
+      // Assign a random color if one isn't provided
+      const goalWithColor = {
+        ...goalData,
+        color: goalData.color || getRandomColor(),
+        user_id: user.id
+      };
+
       const { data, error } = await supabase
         .from('goals')
-        .insert([{ ...goalData, user_id: user.id }])
+        .insert([goalWithColor])
         .select()
         .single()
 
