@@ -11,7 +11,8 @@ import {
   ChevronLeft,
   Plus,
   Pencil,
-  Trash2
+  Trash2,
+  Palette
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useGoals } from '@/hooks/use-goals'
@@ -53,6 +54,9 @@ const calculateProgress = (goal: Goal) => {
   return Math.round((completedMilestones / totalMilestones) * 100);
 };
 
+// Add a consistent width class for badges
+const BADGE_CLASS = "min-w-[70px] text-center"
+
 export default function GoalDetailsPage() {
   const params = useParams()
   const { user } = useUser()
@@ -86,7 +90,8 @@ export default function GoalDetailsPage() {
   const [isEditingDetails, setIsEditingDetails] = useState(false)
   const [editedDetails, setEditedDetails] = useState({
     title: '',
-    description: ''
+    description: '',
+    color: ''
   })
   const [showConfetti, setShowConfetti] = useState(false)
   const [newTaskWeekday, setNewTaskWeekday] = useState<number | undefined>()
@@ -128,6 +133,7 @@ export default function GoalDetailsPage() {
         setEditedDetails({
           title: existingGoal.title,
           description: existingGoal.description,
+          color: existingGoal.color || '#000000'
         });
         setIsLoading(false);
         return;
@@ -154,6 +160,7 @@ export default function GoalDetailsPage() {
         setEditedDetails({
           title: goalData.title,
           description: goalData.description,
+          color: goalData.color || '#000000'
         });
       }
     } catch (err) {
@@ -313,7 +320,8 @@ export default function GoalDetailsPage() {
     try {
       await updateGoal(currentGoal.id, {
         title: editedDetails.title,
-        description: editedDetails.description
+        description: editedDetails.description,
+        color: editedDetails.color
       })
       setIsEditingDetails(false)
       toast.success('Goal details updated successfully')
@@ -451,6 +459,18 @@ export default function GoalDetailsPage() {
                   }))}
                   placeholder="Don&apos;t worry if you&apos;re not sure what to write..."
                 />
+                <div className="flex items-center gap-2">
+                  <Palette className="h-4 w-4" />
+                  <Input
+                    type="color"
+                    value={editedDetails.color}
+                    onChange={(e) => setEditedDetails(prev => ({
+                      ...prev,
+                      color: e.target.value
+                    }))}
+                    className="w-20 h-8 p-1"
+                  />
+                </div>
                 <div className="flex justify-end gap-2">
                   <Button onClick={handleDetailsUpdate}>Save</Button>
                   <Button
@@ -465,7 +485,7 @@ export default function GoalDetailsPage() {
               <>
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-3xl font-bold flex items-center gap-2">
-                    <Target className="h-8 w-8" />
+                    <Target className="h-8 w-8" style={{ color: currentGoal.color || 'currentColor' }} />
                     {currentGoal.title}
                   </CardTitle>
                   <Button
@@ -724,9 +744,9 @@ export default function GoalDetailsPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge>{task.type}</Badge>
+                        <Badge className={BADGE_CLASS}>{task.type}</Badge>
                         {task.type === 'weekly' && task.weekday !== undefined && (
-                          <Badge variant="secondary">
+                          <Badge variant="secondary" className={BADGE_CLASS}>
                             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][task.weekday]}
                           </Badge>
                         )}

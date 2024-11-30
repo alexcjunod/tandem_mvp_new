@@ -6,6 +6,7 @@ import {
   NameType,
   ValueType,
 } from "recharts/types/component/DefaultTooltipContent"
+import { Goal } from "@/types/goals"
 
 export type ChartConfig = {
   [key: string]: {
@@ -73,4 +74,19 @@ export function CustomTooltip<TData extends ValueType, TName extends NameType>({
       </div>
     </div>
   )
+}
+
+export function calculateGoalProgress(goal: Goal): number {
+  if (!goal.tasks || goal.tasks.length === 0) {
+    return 0;
+  }
+
+  // Only consider daily tasks
+  const dailyTasks = goal.tasks.filter((task) => task.type === 'daily');
+  if (dailyTasks.length === 0) {
+    return 0;
+  }
+
+  const completedTasks = dailyTasks.filter((task) => task.completed).length;
+  return Math.round((completedTasks / dailyTasks.length) * 100);
 } 

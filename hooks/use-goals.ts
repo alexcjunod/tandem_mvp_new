@@ -3,13 +3,19 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useUser } from "@clerk/nextjs"
 import { toast } from 'sonner'
 import { Goal, Task, Milestone, Reflection, Resource } from '@/types'
+import { startOfDay, isAfter, parseISO } from 'date-fns'
 
 export function useGoals() {
   const { user } = useUser()
   const [goals, setGoals] = useState<Goal[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
+  const [taskCompletions, setTaskCompletions] = useState<{[key: string]: boolean}>({})
   const [isLoading, setIsLoading] = useState(true)
   const supabase = createClientComponentClient()
+
+  const getTaskCompletionKey = (taskId: string, date: Date = new Date()) => {
+    return `${taskId}-${startOfDay(date).toISOString().split('T')[0]}`
+  }
 
   useEffect(() => {
     console.log('useGoals hook initialized with user:', user);
@@ -39,8 +45,6 @@ export function useGoals() {
 
       if (goalsError) throw goalsError;
 
-      console.log('Fetched goals data:', goalsData);
-
       // Fetch all tasks for the user
       const { data: allTasks, error: tasksError } = await supabase
         .from('tasks')
@@ -49,21 +53,43 @@ export function useGoals() {
 
       if (tasksError) throw tasksError;
 
-      console.log('Fetched tasks data:', allTasks);
+      // Fetch task completions for today
+      const today = startOfDay(new Date()).toISOString().split('T')[0];
+      const { data: completions, error: completionsError } = await supabase
+        .from('task_completions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('completion_date', today);
+
+      if (completionsError) throw completionsError;
+
+      // Create a map of task completions
+      const completionMap = completions?.reduce((acc, completion) => {
+        acc[getTaskCompletionKey(completion.task_id)] = completion.completed;
+        return acc;
+      }, {} as {[key: string]: boolean});
+
+      // Update tasks with completion status
+      const tasksWithCompletions = allTasks.map(task => {
+        const completionKey = getTaskCompletionKey(task.id);
+        if (task.type === 'daily' || task.type === 'weekly') {
+          return {
+            ...task,
+            completed: completionMap[completionKey] || false
+          };
+        }
+        return task;
+      });
 
       // Combine goals with their associated tasks
       const goalsWithTasks = goalsData.map(goal => ({
         ...goal,
-        tasks: allTasks.filter(task => task.goal_id === goal.id)
+        tasks: tasksWithCompletions.filter(task => task.goal_id === goal.id)
       }));
 
-      console.log('Setting goals with tasks:', goalsWithTasks);
-      
-      // Set goals with their associated tasks
       setGoals(goalsWithTasks);
-      
-      // Set all tasks separately for the dashboard
-      setTasks(allTasks);
+      setTasks(tasksWithCompletions);
+      setTaskCompletions(completionMap);
       
       setIsLoading(false);
     } catch (error) {
@@ -139,41 +165,88 @@ export function useGoals() {
 
   const updateGoalTask = async (taskId: string, updates: Partial<Task>) => {
     try {
-      console.log('Updating task:', { taskId, updates });
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) throw new Error('Task not found');
 
-      const { data, error } = await supabase
-        .from('tasks')
-        .update({ 
-          completed: updates.completed,
-        })
-        .eq('id', taskId)
-        .select('*')
-        .single();
+      if (task.type === 'daily' || task.type === 'weekly') {
+        // For recurring tasks, update the completion for today
+        const today = startOfDay(new Date()).toISOString().split('T')[0];
+        const { error: completionError } = await supabase
+          .from('task_completions')
+          .upsert({
+            task_id: taskId,
+            completion_date: today,
+            completed: Boolean(updates.completed),
+            user_id: user?.id
+          }, {
+            onConflict: 'task_id,completion_date',
+            ignoreDuplicates: false
+          });
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
+        if (completionError) throw completionError;
+
+        // Update local state
+        const completionKey = getTaskCompletionKey(taskId);
+        setTaskCompletions(prev => ({
+          ...prev,
+          [completionKey]: Boolean(updates.completed)
+        }));
+
+        // Update tasks state to reflect the change
+        setTasks(prevTasks =>
+          prevTasks.map(t => {
+            if (t.id === taskId && (t.type === 'daily' || t.type === 'weekly')) {
+              return { ...t, completed: Boolean(updates.completed) };
+            }
+            return t;
+          })
+        );
+
+        // Update goals state to reflect the change
+        setGoals(prevGoals =>
+          prevGoals.map(goal => ({
+            ...goal,
+            tasks: goal.tasks?.map(t => {
+              if (t.id === taskId && (t.type === 'daily' || t.type === 'weekly')) {
+                return { ...t, completed: Boolean(updates.completed) };
+              }
+              return t;
+            })
+          }))
+        );
+      } else {
+        // For one-time tasks, update the task directly
+        const { error } = await supabase
+          .from('tasks')
+          .update({ completed: Boolean(updates.completed) })
+          .eq('id', taskId);
+
+        if (error) throw error;
+
+        // Update local state for one-time tasks
+        setTasks(prevTasks =>
+          prevTasks.map(t => {
+            if (t.id === taskId) {
+              return { ...t, completed: Boolean(updates.completed) };
+            }
+            return t;
+          })
+        );
+
+        setGoals(prevGoals =>
+          prevGoals.map(goal => ({
+            ...goal,
+            tasks: goal.tasks?.map(t => {
+              if (t.id === taskId) {
+                return { ...t, completed: Boolean(updates.completed) };
+              }
+              return t;
+            })
+          }))
+        );
       }
 
-      console.log('Task update response:', data);
-
-      // Update both goals and tasks arrays
-      setGoals(prevGoals => 
-        prevGoals.map(goal => ({
-          ...goal,
-          tasks: goal.tasks?.map(task => 
-            task.id === taskId ? { ...task, ...updates } : task
-          )
-        }))
-      );
-
-      setTasks(prevTasks =>
-        prevTasks.map(task =>
-          task.id === taskId ? { ...task, ...updates } : task
-        )
-      );
-
-      return data;
+      return true;
     } catch (err) {
       console.error('Error updating task:', err);
       toast.error('Failed to update task');

@@ -146,6 +146,9 @@ interface TaskItemProps {
   goals: Goal[]
 }
 
+// Add consistent badge width with vertical centering
+const BADGE_CLASS = "min-w-[70px] text-center flex items-center justify-center h-6"
+
 function TaskItem({ task, onToggle, goals }: TaskItemProps) {
   const goal = task.goal_id ? goals.find(g => g.id === task.goal_id) : null;
   
@@ -170,6 +173,7 @@ function TaskItem({ task, onToggle, goals }: TaskItemProps) {
         {task.goal_id && goal && (
           <Badge 
             variant="outline" 
+            className={BADGE_CLASS}
             style={{ 
               borderColor: goal.color,
               color: goal.color
@@ -179,23 +183,23 @@ function TaskItem({ task, onToggle, goals }: TaskItemProps) {
           </Badge>
         )}
         {!task.goal_id && (
-          <Badge variant="secondary">
+          <Badge variant="secondary" className={BADGE_CLASS}>
             General
           </Badge>
         )}
         {task.type === 'daily' && (
-          <Badge variant="secondary">
+          <Badge variant="secondary" className={BADGE_CLASS}>
             Daily
           </Badge>
         )}
         {task.type === 'weekly' && task.weekday !== undefined && (
-          <Badge variant="secondary">
+          <Badge variant="secondary" className={BADGE_CLASS}>
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][task.weekday]}
           </Badge>
         )}
         {task.type === 'custom' && task.date && (
-          <Badge variant="secondary">
-            {format(new Date(task.date), 'MMM d, yyyy')}
+          <Badge variant="secondary" className={BADGE_CLASS}>
+            {format(new Date(task.date), 'MMM d')}
           </Badge>
         )}
       </div>
@@ -785,8 +789,8 @@ export default function Dashboard() {
             <CardContent>
               <ul className="space-y-4">
                 {(selectedGoalId === "all" 
-                  ? (currentGoal?.milestones ?? [])
-                  : (currentGoal?.milestones ?? [])
+                  ? goals.flatMap(g => g.milestones ?? [])
+                  : currentGoal?.milestones ?? []
                 ).map((milestone) => (
                   <li key={milestone.id} className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -802,9 +806,13 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground min-w-[100px] text-right">
+                        {format(new Date(milestone.date), 'MMM d, yyyy')}
+                      </span>
                       {selectedGoalId === "all" && milestone.goal_id && (
                         <Badge 
                           variant="outline" 
+                          className={BADGE_CLASS}
                           style={{ 
                             borderColor: goals.find(g => g.id === milestone.goal_id)?.color ?? 'var(--primary)',
                             color: goals.find(g => g.id === milestone.goal_id)?.color ?? 'var(--primary)'
@@ -813,9 +821,6 @@ export default function Dashboard() {
                           {goals.find(g => g.id === milestone.goal_id)?.title || "General"}
                         </Badge>
                       )}
-                      <span className="text-sm text-muted-foreground">
-                        {format(new Date(milestone.date), 'dd/MM/yyyy')}
-                      </span>
                     </div>
                   </li>
                 ))}
