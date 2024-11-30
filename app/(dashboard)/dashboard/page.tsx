@@ -370,6 +370,12 @@ export default function Dashboard() {
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [tasks]);
 
+  useEffect(() => {
+    if (!goalsLoading && goals.length === 0) {
+      router.push('/onboarding')
+    }
+  }, [goalsLoading, goals, router])
+
   // Add loading check after all hooks
   if (goalsLoading) {
     return (
@@ -530,19 +536,6 @@ export default function Dashboard() {
           <p className="text-muted-foreground">Track your progress across all goals</p>
         </div>
         <div className="flex items-center gap-4">
-          <Select value={selectedGoalId || ""} onValueChange={setSelectedGoalId}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select a goal" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Goals</SelectItem>
-              {goals.map(goal => (
-                <SelectItem key={goal.id} value={goal.id}>
-                  {goal.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Button onClick={() => router.push('/onboarding')}>
             <Plus className="mr-2 h-4 w-4" /> New Goal
           </Button>

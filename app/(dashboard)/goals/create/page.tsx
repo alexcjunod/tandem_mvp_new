@@ -1,10 +1,14 @@
-import AIGoalCreator from "@/components/goals/ai-goal-creator"
+"use client"
+
+import { useGoals } from "@/hooks/use-goals"
+import OnboardingFlow from "@/onboarding-flow"
 
 export default function CreateGoalPage() {
-  return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-2xl font-bold mb-8">Create a New Goal</h1>
-      <AIGoalCreator />
-    </div>
-  )
+  const { isLoading } = useGoals()
+
+  if (isLoading) {
+    return <div>Loading...</div>
+  }
+
+  return <OnboardingFlow />
 } 
