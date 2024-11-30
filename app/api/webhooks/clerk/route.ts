@@ -1,16 +1,19 @@
+import { NextResponse } from 'next/server'
 import { Webhook } from 'svix'
 import { headers } from 'next/headers'
 import { WebhookEvent } from '@clerk/nextjs/server'
 import { supabase } from '@/lib/supabase/client'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: Request) {
-  const headersList = await headers()
+  const headersList = headers()
   const svix_id = headersList.get("svix-id")
   const svix_timestamp = headersList.get("svix-timestamp")
   const svix_signature = headersList.get("svix-signature")
 
   if (!svix_id || !svix_timestamp || !svix_signature) {
-    return new Response('Missing svix headers', { status: 400 })
+    return NextResponse.json({ error: 'Missing svix headers' }, { status: 400 })
   }
 
   // Get the body
@@ -47,9 +50,9 @@ export async function POST(req: Request) {
       }
     }
 
-    return new Response('Success', { status: 200 })
+    return NextResponse.json({ message: 'Success' }, { status: 200 })
   } catch (err) {
     console.error('Error verifying webhook:', err)
-    return new Response('Error verifying webhook', { status: 400 })
+    return NextResponse.json({ error: 'Error verifying webhook' }, { status: 400 })
   }
 } 
