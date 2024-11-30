@@ -2,11 +2,17 @@ import { NextResponse } from 'next/server'
 import { Webhook } from 'svix'
 import { headers } from 'next/headers'
 import { WebhookEvent } from '@clerk/nextjs/server'
-import { supabase } from '@/lib/supabase/client'
+import { createClient } from '@supabase/supabase-js'
 
+export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
   const headersList = headers()
   const svix_id = headersList.get("svix-id")
   const svix_timestamp = headersList.get("svix-timestamp")
@@ -38,7 +44,7 @@ export async function POST(req: Request) {
         const lastName = 'last_name' in data ? data.last_name : ''
         const imageUrl = 'image_url' in data ? data.image_url : ''
 
-        await supabase
+        const { error: upsertError } = await supabase
           .from('profiles')
           .upsert({
             id: data.id,
@@ -47,6 +53,11 @@ export async function POST(req: Request) {
             avatar_url: imageUrl,
             updated_at: new Date().toISOString()
           })
+
+        if (upsertError) {
+          console.error('Error upserting profile:', upsertError)
+          return NextResponse.json({ error: 'Database error' }, { status: 500 })
+        }
       }
     }
 
