@@ -14,49 +14,54 @@ export default function HomePage() {
   const { user, isLoaded } = useUser()
   const router = useRouter()
 
-  // Add debug logging
-  useEffect(() => {
-    console.log('HomePage mounted:', {
-      isLoaded,
-      hasUser: !!user,
-      user
-    });
-  }, [isLoaded, user]);
-
-  // Redirect to dashboard if user is already logged in
   useEffect(() => {
     if (isLoaded && user) {
-      console.log('Redirecting to dashboard:', {
-        isLoaded,
-        userId: user.id
-      });
       router.push('/dashboard')
     }
   }, [isLoaded, user, router])
 
-  // Show loading state while checking auth
-  if (!isLoaded) {
-    console.log('Auth still loading');
-    return null
-  }
+  if (!isLoaded) return null
 
-  // Only show landing page if user is not logged in
   if (!user) {
-    console.log('No user, showing landing page');
     return (
       <>
-        <div className="md:hidden min-h-screen bg-background">
-          <div className="relative w-full h-screen">
-            <Image
-              src="/hero-mobile.jpg"
-              alt="Tandem App"
-              fill
-              style={{ objectFit: 'cover' }}
-              priority
-              className="block dark:hidden"
-            />
+        {/* Mobile Layout */}
+        <div className="md:hidden min-h-screen bg-background relative">
+          <Image
+            src="/hero-mobile.jpg"
+            alt="Tandem App"
+            fill
+            style={{ objectFit: 'cover' }}
+            priority
+            className="block dark:hidden"
+          />
+          <div className="relative z-10 flex min-h-screen flex-col items-center justify-center p-6">
+            <div className="w-full max-w-sm space-y-6">
+              <div className="flex flex-col space-y-2 text-center">
+                <h1 className="text-2xl font-semibold tracking-tight text-white">
+                  Welcome to Tandem
+                </h1>
+                <p className="text-sm text-gray-200">
+                  Track your goals, manage tasks, and achieve more together
+                </p>
+              </div>
+              <div className="grid gap-4">
+                <SignUpButton mode="modal" afterSignUpUrl="/dashboard" afterSignInUrl="/dashboard">
+                  <Button className="w-full">
+                    Create Account
+                  </Button>
+                </SignUpButton>
+                <SignInButton mode="modal" afterSignInUrl="/dashboard">
+                  <Button variant="outline" className="w-full bg-white/10 hover:bg-white/20">
+                    Sign In
+                  </Button>
+                </SignInButton>
+              </div>
+            </div>
           </div>
         </div>
+
+        {/* Desktop Layout */}
         <div className="container relative hidden min-h-screen flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0">
           <div className="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex">
             <div className="absolute inset-0 bg-zinc-900" />
