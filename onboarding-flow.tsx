@@ -156,7 +156,7 @@ export default function OnboardingFlow() {
           initialTasks: selectedGoalData.tasks.map(task => ({
             title: task.title,
             type: task.type,
-            weekday: task.weekday
+            ...(task.type === 'weekly' ? { weekday: task.weekday || 0 } : {})
           })),
           initialMilestones: selectedGoalData.milestones.map(m => ({
             title: m.title,
@@ -232,7 +232,7 @@ export default function OnboardingFlow() {
     initialTasks: [{ 
       title: "", 
       type: "daily" as "daily" | "weekly" | "custom",
-      weekday: 0 
+      ...(type === 'weekly' ? { weekday: 0 } : {})
     }],
     initialMilestones: [{ title: "", date: "" }]
   })
@@ -240,7 +240,11 @@ export default function OnboardingFlow() {
   const handleAddTask = () => {
     setManualGoal(prev => ({
       ...prev,
-      initialTasks: [...prev.initialTasks, { title: "", type: "daily" as "daily" | "weekly" | "custom", weekday: 0 }]
+      initialTasks: [...prev.initialTasks, { 
+        title: "", 
+        type: "daily" as "daily" | "weekly" | "custom",
+        ...(type === 'weekly' ? { weekday: 0 } : {})
+      }]
     }))
   }
 
@@ -615,7 +619,7 @@ export default function OnboardingFlow() {
                             initialTasks: selectedGoalData.tasks.map(task => ({
                               title: task.title,
                               type: task.type,
-                              weekday: task.weekday || 0
+                              ...(task.type === 'weekly' ? { weekday: task.weekday || 0 } : {})
                             })),
                             initialMilestones: selectedGoalData.milestones.map(m => ({
                               title: m.title,
