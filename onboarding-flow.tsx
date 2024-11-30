@@ -114,6 +114,44 @@ const popularGoals: (PresetGoal | SimpleGoal)[] = [
   { id: "custom", title: "Create Custom Goal (AI)", icon: Plus }
 ]
 
+// Add utility functions
+const filterTasks = (tasks: Task[], view: 'daily' | 'weekly' | 'all') => {
+  const today = new Date();
+  const currentDayOfWeek = today.getDay();
+
+  switch (view) {
+    case 'daily':
+      return tasks.filter(task => 
+        task.type === 'daily' || 
+        (task.type === 'weekly' && task.weekday === currentDayOfWeek)
+      ).sort((a, b) => {
+        if (a.type === 'daily' && b.type === 'weekly') return -1;
+        if (a.type === 'weekly' && b.type === 'daily') return 1;
+        return a.title.localeCompare(b.title);
+      });
+
+    case 'weekly':
+      return tasks
+        .filter(task => task.type === 'weekly')
+        .sort((a, b) => {
+          if (a.weekday === undefined || b.weekday === undefined) return 0;
+          if (a.weekday !== b.weekday) return a.weekday - b.weekday;
+          return a.title.localeCompare(b.title);
+        });
+
+    default:
+      return tasks.sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'daily' ? -1 : 1;
+        return a.title.localeCompare(b.title);
+      });
+  }
+};
+
+const getWeekdayName = (weekday: number): string => {
+  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return weekdays[weekday];
+};
+
 export default function OnboardingFlow() {
   const router = useRouter()
   const { user } = useUser()
@@ -138,6 +176,43 @@ export default function OnboardingFlow() {
     category: "",
   })
 
+  const [manualGoal, setManualGoal] = useState<{
+    title: string;
+    description: string;
+    start_date: string;
+    end_date: string;
+    smart_goal: {
+      specific: string;
+      measurable: string;
+      achievable: string;
+      relevant: string;
+      timeBound: string;
+    };
+    reasoning: string;
+    color: string;
+    initialTasks: Task[];
+    initialMilestones: { title: string; date: string; }[];
+  }>({
+    title: "",
+    description: "",
+    start_date: "",
+    end_date: "",
+    smart_goal: {
+      specific: "",
+      measurable: "",
+      achievable: "",
+      relevant: "",
+      timeBound: ""
+    },
+    reasoning: "",
+    color: "#000000",
+    initialTasks: [{ 
+      title: "", 
+      type: "daily"
+    }],
+    initialMilestones: [{ title: "", date: "" }]
+  })
+
   const handleGoalSelect = (goalId: string) => {
     setSelectedGoal(goalId)
     if (goalId === "custom") {
@@ -156,7 +231,7 @@ export default function OnboardingFlow() {
           initialTasks: selectedGoalData.tasks.map(task => ({
             title: task.title,
             type: task.type,
-            ...(task.type === 'weekly' ? { weekday: task.weekday || 0 } : {})
+            ...(task.type === 'weekly' ? { weekday: task.weekday ?? 0 } : {})
           })),
           initialMilestones: selectedGoalData.milestones.map(m => ({
             title: m.title,
@@ -215,35 +290,12 @@ export default function OnboardingFlow() {
     }
   }
 
-  const [manualGoal, setManualGoal] = useState({
-    title: "",
-    description: "",
-    start_date: "",
-    end_date: "",
-    smart_goal: {
-      specific: "",
-      measurable: "",
-      achievable: "",
-      relevant: "",
-      timeBound: ""
-    },
-    reasoning: "",
-    color: "#000000",
-    initialTasks: [{ 
-      title: "", 
-      type: "daily" as "daily" | "weekly" | "custom",
-      ...(type === 'weekly' ? { weekday: 0 } : {})
-    }],
-    initialMilestones: [{ title: "", date: "" }]
-  })
-
   const handleAddTask = () => {
     setManualGoal(prev => ({
       ...prev,
       initialTasks: [...prev.initialTasks, { 
         title: "", 
-        type: "daily" as "daily" | "weekly" | "custom",
-        ...(type === 'weekly' ? { weekday: 0 } : {})
+        type: "daily"
       }]
     }))
   }
@@ -619,7 +671,7 @@ export default function OnboardingFlow() {
                             initialTasks: selectedGoalData.tasks.map(task => ({
                               title: task.title,
                               type: task.type,
-                              ...(task.type === 'weekly' ? { weekday: task.weekday || 0 } : {})
+                              ...(task.type === 'weekly' ? { weekday: task.weekday ?? 0 } : {})
                             })),
                             initialMilestones: selectedGoalData.milestones.map(m => ({
                               title: m.title,

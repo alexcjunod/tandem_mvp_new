@@ -181,6 +181,11 @@ function TaskItem({ task, onToggle, goals }: TaskItemProps) {
               General
             </Badge>
           )}
+          {task.type === 'daily' && (
+            <Badge variant="secondary" className="ml-2">
+              Daily
+            </Badge>
+          )}
           {task.type === 'weekly' && task.weekday !== undefined && (
             <Badge variant="secondary" className="ml-2">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][task.weekday]}
@@ -222,6 +227,50 @@ const chartConfig = {
   // This will be dynamically populated with goals
 } satisfies ChartConfig
 
+// Add these utility functions after imports
+const filterTasks = (tasks: Task[], view: 'daily' | 'weekly' | 'all') => {
+  const today = new Date();
+  const currentDayOfWeek = today.getDay();
+
+  switch (view) {
+    case 'daily':
+      // Return daily tasks and weekly tasks for current day
+      return tasks.filter(task => 
+        task.type === 'daily' || 
+        (task.type === 'weekly' && task.weekday === currentDayOfWeek)
+      ).sort((a, b) => {
+        // Sort daily tasks before weekly tasks
+        if (a.type === 'daily' && b.type === 'weekly') return -1;
+        if (a.type === 'weekly' && b.type === 'daily') return 1;
+        return a.title.localeCompare(b.title);
+      });
+
+    case 'weekly':
+      // Return all weekly tasks
+      return tasks
+        .filter(task => task.type === 'weekly')
+        .sort((a, b) => {
+          if (a.weekday === undefined || b.weekday === undefined) return 0;
+          // Sort by weekday first
+          if (a.weekday !== b.weekday) return a.weekday - b.weekday;
+          // Then by title
+          return a.title.localeCompare(b.title);
+        });
+
+    default:
+      // Return all tasks
+      return tasks.sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'daily' ? -1 : 1;
+        return a.title.localeCompare(b.title);
+      });
+  }
+};
+
+const getWeekdayName = (weekday: number): string => {
+  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return weekdays[weekday];
+};
+
 export default function Dashboard() {
   const router = useRouter()
   const { width, height } = useWindowSize()
@@ -255,6 +304,7 @@ export default function Dashboard() {
   const [newResourceUrl, setNewResourceUrl] = useState("")
   const [newResourceGoalId, setNewResourceGoalId] = useState<string>("general")
   const [newTaskWeekday, setNewTaskWeekday] = useState<number | undefined>(undefined)
+  const [taskView, setTaskView] = useState<'daily' | 'weekly' | 'all'>('daily');
 
   // Memoize the setup function to avoid recreation on every render
   const setupSupabase = useMemo(() => async () => {
@@ -349,20 +399,33 @@ export default function Dashboard() {
   }, [selectedGoalId, goals]);
 
   const dailyTasks = useMemo(() => {
-    return tasks
-      .filter(task => task.type === 'daily')
-      .sort((a, b) => a.title.localeCompare(b.title))
-  }, [tasks])
+    const today = new Date();
+    const currentDayOfWeek = today.getDay();
+    return [
+      // Daily tasks
+      ...tasks.filter(task => task.type === 'daily'),
+      // Weekly tasks for today
+      ...tasks.filter(task => 
+        task.type === 'weekly' && 
+        task.weekday === currentDayOfWeek
+      )
+    ].sort((a, b) => a.title.localeCompare(b.title));
+  }, [tasks]);
 
   const weeklyTasks = useMemo(() => {
-    const today = new Date()
+    const today = new Date();
+    const currentDayOfWeek = today.getDay();
     return tasks
       .filter(task => 
         task.type === 'weekly' && 
-        task.weekday === today.getDay()
+        task.weekday !== currentDayOfWeek // Only show weekly tasks for other days
       )
-      .sort((a, b) => a.title.localeCompare(b.title))
-  }, [tasks])
+      .sort((a, b) => {
+        // Sort by weekday first
+        if (a.weekday === undefined || b.weekday === undefined) return 0;
+        return (a.weekday - b.weekday) || a.title.localeCompare(b.title);
+      });
+  }, [tasks]);
 
   const customOnlyTasks = useMemo(() => {
     return tasks
