@@ -159,44 +159,45 @@ function TaskItem({ task, onToggle, goals }: TaskItemProps) {
         />
         <label
           htmlFor={task.id}
-          className={`flex items-center space-x-2 text-sm font-medium leading-none ${
+          className={`text-sm font-medium leading-none ${
             task.completed ? 'line-through text-muted-foreground' : ''
           }`}
         >
-          <span>{task.title}</span>
-          {task.goal_id && goal && (
-            <Badge 
-              variant="outline" 
-              className="ml-2"
-              style={{ 
-                borderColor: goal.color,
-                color: goal.color
-              }}
-            >
-              {goal.title}
-            </Badge>
-          )}
-          {!task.goal_id && (
-            <Badge variant="secondary" className="ml-2">
-              General
-            </Badge>
-          )}
-          {task.type === 'daily' && (
-            <Badge variant="secondary" className="ml-2">
-              Daily
-            </Badge>
-          )}
-          {task.type === 'weekly' && task.weekday !== undefined && (
-            <Badge variant="secondary" className="ml-2">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][task.weekday]}
-            </Badge>
-          )}
-          {task.type === 'custom' && task.date && (
-            <Badge variant="secondary" className="ml-2">
-              {format(new Date(task.date), 'MMM d, yyyy')}
-            </Badge>
-          )}
+          {task.title}
         </label>
+      </div>
+      <div className="flex items-center gap-2">
+        {task.goal_id && goal && (
+          <Badge 
+            variant="outline" 
+            style={{ 
+              borderColor: goal.color,
+              color: goal.color
+            }}
+          >
+            {goal.title}
+          </Badge>
+        )}
+        {!task.goal_id && (
+          <Badge variant="secondary">
+            General
+          </Badge>
+        )}
+        {task.type === 'daily' && (
+          <Badge variant="secondary">
+            Daily
+          </Badge>
+        )}
+        {task.type === 'weekly' && task.weekday !== undefined && (
+          <Badge variant="secondary">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][task.weekday]}
+          </Badge>
+        )}
+        {task.type === 'custom' && task.date && (
+          <Badge variant="secondary">
+            {format(new Date(task.date), 'MMM d, yyyy')}
+          </Badge>
+        )}
       </div>
     </div>
   )
@@ -796,27 +797,26 @@ export default function Dashboard() {
                           selectedGoalId === "all" ? milestone.goal_id : undefined
                         )}
                       />
-                      <div className={`flex items-center space-x-2 ${
-                        milestone.completed ? 'line-through text-muted-foreground' : ''
-                      }`}>
-                        <span>{milestone.title}</span>
-                        {selectedGoalId === "all" && milestone.goal_id && (
-                          <Badge 
-                            variant="outline" 
-                            className="ml-2"
-                            style={{ 
-                              borderColor: goals.find(g => g.id === milestone.goal_id)?.color ?? 'var(--primary)',
-                              color: goals.find(g => g.id === milestone.goal_id)?.color ?? 'var(--primary)'
-                            }}
-                          >
-                            {goals.find(g => g.id === milestone.goal_id)?.title || "General"}
-                          </Badge>
-                        )}
-                      </div>
+                      <span className={milestone.completed ? 'line-through text-muted-foreground' : ''}>
+                        {milestone.title}
+                      </span>
                     </div>
-                    <span className="text-sm text-muted-foreground">
-                      {format(new Date(milestone.date), 'dd/MM/yyyy')}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {selectedGoalId === "all" && milestone.goal_id && (
+                        <Badge 
+                          variant="outline" 
+                          style={{ 
+                            borderColor: goals.find(g => g.id === milestone.goal_id)?.color ?? 'var(--primary)',
+                            color: goals.find(g => g.id === milestone.goal_id)?.color ?? 'var(--primary)'
+                          }}
+                        >
+                          {goals.find(g => g.id === milestone.goal_id)?.title || "General"}
+                        </Badge>
+                      )}
+                      <span className="text-sm text-muted-foreground">
+                        {format(new Date(milestone.date), 'dd/MM/yyyy')}
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>

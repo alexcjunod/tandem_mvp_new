@@ -3,13 +3,14 @@
 import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { UserButton, useUser, useAuth } from "@clerk/nextjs"
-import { Home, Users, Settings, Target } from "lucide-react"
+import { Home, Users, Settings, Target, Calendar as CalendarIcon } from "lucide-react"
 import { updateSupabaseAuthToken } from "@/lib/supabase/client"
 
 const sidebarLinks = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/community", label: "Community", icon: Users },
+  { href: "/calendar", label: "Calendar", icon: CalendarIcon },
 ]
 
 export default function DashboardLayout({
