@@ -1,7 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['react-big-calendar'],
+  transpilePackages: [
+    '@fullcalendar/common',
+    '@fullcalendar/core',
+    '@fullcalendar/daygrid',
+    '@fullcalendar/interaction',
+    '@fullcalendar/react',
+    '@fullcalendar/timegrid'
+  ],
   images: {
     domains: [
       'replicate.delivery',
