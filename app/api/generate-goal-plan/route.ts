@@ -6,33 +6,63 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 })
 
-interface AIResponse {
-  smartGoal: {
-    specific: string;
-    measurable: string;
-    achievable: string;
-    relevant: string;
-    timeBound: string;
-  };
-  milestones: Array<{
-    title: string;
-    date: string;
-  }>;
-  tasks: Array<{
-    title: string;
-    type: 'daily' | 'weekly';
-    weekday?: number;
-    date?: string;
-  }>;
-}
-
 export async function POST(req: Request) {
   try {
     const { title, reasoning, specific, targetDate } = await req.json()
 
-    const prompt = `Create a SMART goal plan for learning ${title}. Include specific milestones and both daily and weekly tasks.`
+    const prompt = `[INST] Create a structured SMART goal plan for: "${title}"
 
-    let response = await replicate.run(
+Context:
+- User's motivation: ${reasoning}
+- Success criteria: ${specific}
+- Target date: ${targetDate}
+
+Return a valid JSON object with this exact structure (no additional text):
+{
+  "smartGoal": {
+    "specific": "Clear goal statement",
+    "measurable": "How to track progress",
+    "achievable": "Why it's realistic",
+    "relevant": "Connection to motivation",
+    "timeBound": "Timeline with target date"
+  },
+  "milestones": [
+    {
+      "title": "Clear milestone description",
+      "date": "YYYY-MM-DD"
+    }
+  ],
+  "tasks": [
+    {
+      "title": "Daily task description",
+      "type": "daily",
+      "date": "YYYY-MM-DD"
+    },
+    {
+      "title": "Weekly task description",
+      "type": "weekly",
+      "weekday": 0,
+      "date": "YYYY-MM-DD"
+    }
+  ]
+}
+
+Requirements:
+- Include 2-3 daily practice tasks
+- Include at least 5 different weekly tasks spread across different days
+- Each weekly task should be on a different day (weekday: 0-6, where 0 is Sunday)
+- Tasks should build up progressively towards the final goal
+- Task types must be exactly "daily" or "weekly"
+
+Example weekly tasks distribution:
+- Sunday (weekday: 0): Review and planning session
+- Monday (weekday: 1): Technique practice
+- Tuesday (weekday: 2): New material learning
+- Wednesday (weekday: 3): Practice with backing tracks
+- Thursday (weekday: 4): Recording and evaluation
+[/INST]`
+
+    const output = await replicate.run(
       "meta/llama-2-70b-chat:02e509c789964a7ea8736978a43525956ef40397be9033abf9fd2badfe68c9e3",
       {
         input: {
@@ -43,54 +73,33 @@ export async function POST(req: Request) {
       }
     )
 
-    // Create a default response if AI fails
-    const defaultResponse: AIResponse = {
-      smartGoal: {
-        specific: `Learn ${title} to a proficient level`,
-        measurable: "Track progress through completed tasks and milestones",
-        achievable: "Break down into manageable daily and weekly tasks",
-        relevant: reasoning || "Personal development goal",
-        timeBound: `Complete by ${targetDate}`
-      },
-      milestones: [
-        {
-          title: "Get started",
-          date: new Date().toISOString().split('T')[0]
-        }
-      ],
-      tasks: [
-        {
-          title: "Daily practice",
-          type: "daily"
-        },
-        {
-          title: "Weekly review",
-          type: "weekly",
-          weekday: 0
-        }
-      ]
+    // Parse and clean the response
+    let jsonString = '';
+    if (Array.isArray(output)) {
+      jsonString = output.join('').trim();
+    } else if (typeof output === 'string') {
+      jsonString = output.trim();
+    } else {
+      throw new Error('Unexpected output format from AI');
     }
 
-    let parsedResponse: AIResponse;
-
-    try {
-      // Try to parse AI response
-      const responseText = Array.isArray(response) ? response.join('') : String(response || '');
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      parsedResponse = jsonMatch ? JSON.parse(jsonMatch[0]) : defaultResponse;
-    } catch (error) {
-      console.error('Error parsing AI response:', error);
-      parsedResponse = defaultResponse;
+    // Extract JSON
+    const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No valid JSON found in response');
     }
 
-    // Format the response for display
-    const formattedPlan = formatPlan(parsedResponse);
+    const parsedOutput = JSON.parse(jsonMatch[0]);
+
+    // Validate structure
+    if (!parsedOutput.smartGoal || !parsedOutput.milestones || !parsedOutput.tasks) {
+      throw new Error('Invalid response structure');
+    }
 
     return NextResponse.json({ 
-      plan: formattedPlan,
-      rawPlan: parsedResponse
+      plan: formatPlan(parsedOutput),
+      rawPlan: parsedOutput
     });
-
   } catch (error) {
     console.error("Error:", error)
     return NextResponse.json(
@@ -100,7 +109,8 @@ export async function POST(req: Request) {
   }
 }
 
-function formatPlan(plan: AIResponse) {
+// Helper function to format the plan
+function formatPlan(plan: any) {
   return `📋 SMART Goal Breakdown
 ──────────────────────
 
@@ -123,7 +133,7 @@ ${plan.smartGoal.timeBound}
 🏆 Key Milestones
 ──────────────────
 
-${plan.milestones.map(m => 
+${plan.milestones.map((m: any) => 
   `${format(new Date(m.date), 'MMM d, yyyy')}
   ▸ ${m.title}`
 ).join('\n\n')}
@@ -133,8 +143,8 @@ ${plan.milestones.map(m =>
 ──────────────────
 
 ${plan.tasks
-  .filter(t => t.type === 'daily')
-  .map(t => 
+  .filter((t: any) => t.type === 'daily')
+  .map((t: any) => 
     `• ${t.title}`
   ).join('\n\n')}
 
@@ -143,8 +153,8 @@ ${plan.tasks
 ──────────────────
 
 ${plan.tasks
-  .filter(t => t.type === 'weekly')
-  .map(t => 
+  .filter((t: any) => t.type === 'weekly')
+  .map((t: any) => 
     `${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][t.weekday || 0]}:
   ▸ ${t.title}`
   ).join('\n\n')}`;
