@@ -6,13 +6,33 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 })
 
+interface AIResponse {
+  smartGoal: {
+    specific: string;
+    measurable: string;
+    achievable: string;
+    relevant: string;
+    timeBound: string;
+  };
+  milestones: Array<{
+    title: string;
+    date: string;
+  }>;
+  tasks: Array<{
+    title: string;
+    type: 'daily' | 'weekly';
+    weekday?: number;
+    date?: string;
+  }>;
+}
+
 export async function POST(req: Request) {
   try {
     const { title, reasoning, specific, targetDate } = await req.json()
 
-    const prompt = `[INST] Create a structured SMART goal plan for: "${title}"...`
+    const prompt = `Create a SMART goal plan for learning ${title}. Include specific milestones and both daily and weekly tasks.`
 
-    const output = await replicate.run(
+    let response = await replicate.run(
       "meta/llama-2-70b-chat:02e509c789964a7ea8736978a43525956ef40397be9033abf9fd2badfe68c9e3",
       {
         input: {
@@ -21,46 +41,56 @@ export async function POST(req: Request) {
           temperature: 0.7,
         }
       }
-    );
+    )
 
-    // Parse and clean the response
-    let jsonString = '';
-    
-    // Type guard functions
-    const isStringArray = (value: unknown): value is string[] => 
-      Array.isArray(value) && value.every(item => typeof item === 'string');
-    
-    const isErrorObject = (value: unknown): value is { error: string } =>
-      typeof value === 'object' && value !== null && 'error' in value;
-
-    // Handle different output types
-    if (isStringArray(output)) {
-      jsonString = output.join('').trim();
-    } else if (typeof output === 'string') {
-      jsonString = output.trim();
-    } else if (isErrorObject(output)) {
-      throw new Error(output.error);
-    } else {
-      throw new Error('Unexpected output format from AI');
+    // Create a default response if AI fails
+    const defaultResponse: AIResponse = {
+      smartGoal: {
+        specific: `Learn ${title} to a proficient level`,
+        measurable: "Track progress through completed tasks and milestones",
+        achievable: "Break down into manageable daily and weekly tasks",
+        relevant: reasoning || "Personal development goal",
+        timeBound: `Complete by ${targetDate}`
+      },
+      milestones: [
+        {
+          title: "Get started",
+          date: new Date().toISOString().split('T')[0]
+        }
+      ],
+      tasks: [
+        {
+          title: "Daily practice",
+          type: "daily"
+        },
+        {
+          title: "Weekly review",
+          type: "weekly",
+          weekday: 0
+        }
+      ]
     }
 
-    // Extract JSON
-    const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No valid JSON found in response');
+    let parsedResponse: AIResponse;
+
+    try {
+      // Try to parse AI response
+      const responseText = Array.isArray(response) ? response.join('') : String(response || '');
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      parsedResponse = jsonMatch ? JSON.parse(jsonMatch[0]) : defaultResponse;
+    } catch (error) {
+      console.error('Error parsing AI response:', error);
+      parsedResponse = defaultResponse;
     }
 
-    const parsedOutput = JSON.parse(jsonMatch[0]);
-
-    // Validate structure
-    if (!parsedOutput.smartGoal || !parsedOutput.milestones || !parsedOutput.tasks) {
-      throw new Error('Invalid response structure');
-    }
+    // Format the response for display
+    const formattedPlan = formatPlan(parsedResponse);
 
     return NextResponse.json({ 
-      plan: formatPlan(parsedOutput),
-      rawPlan: parsedOutput
+      plan: formattedPlan,
+      rawPlan: parsedResponse
     });
+
   } catch (error) {
     console.error("Error:", error)
     return NextResponse.json(
@@ -70,8 +100,7 @@ export async function POST(req: Request) {
   }
 }
 
-// Helper function to format the plan
-function formatPlan(plan: any) {
+function formatPlan(plan: AIResponse) {
   return `📋 SMART Goal Breakdown
 ──────────────────────
 
@@ -94,7 +123,7 @@ ${plan.smartGoal.timeBound}
 🏆 Key Milestones
 ──────────────────
 
-${plan.milestones.map((m: any) => 
+${plan.milestones.map(m => 
   `${format(new Date(m.date), 'MMM d, yyyy')}
   ▸ ${m.title}`
 ).join('\n\n')}
@@ -104,8 +133,8 @@ ${plan.milestones.map((m: any) =>
 ──────────────────
 
 ${plan.tasks
-  .filter((t: any) => t.type === 'daily')
-  .map((t: any) => 
+  .filter(t => t.type === 'daily')
+  .map(t => 
     `• ${t.title}`
   ).join('\n\n')}
 
@@ -114,8 +143,8 @@ ${plan.tasks
 ──────────────────
 
 ${plan.tasks
-  .filter((t: any) => t.type === 'weekly')
-  .map((t: any) => 
+  .filter(t => t.type === 'weekly')
+  .map(t => 
     `${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][t.weekday || 0]}:
   ▸ ${t.title}`
   ).join('\n\n')}`;
