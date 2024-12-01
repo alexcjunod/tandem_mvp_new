@@ -18,7 +18,7 @@ import { Goal } from "@/types/goals"
 
 interface Task {
   title: string
-  type: "daily" | "weekly"
+  type: "daily" | "weekly" | "custom"
   weekday?: number // 0-6 for Sunday-Saturday, required for weekly tasks
 }
 
@@ -543,6 +543,7 @@ export default function OnboardingFlow() {
                     <SelectContent>
                       <SelectItem value="daily">Daily</SelectItem>
                       <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
                     </SelectContent>
                   </Select>
                   {task.type === 'weekly' && (

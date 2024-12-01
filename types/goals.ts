@@ -26,7 +26,7 @@ export interface Goal {
 export interface Task {
   id: string
   title: string
-  type: 'daily' | 'weekly'
+  type: 'daily' | 'weekly' | 'custom'
   date: string
   goal_id: string
   user_id: string
