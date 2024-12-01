@@ -6,6 +6,9 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 })
 
+// Add type for the output
+type ReplicateOutput = string[] | string | null;
+
 export async function POST(req: Request) {
   try {
     const { title, reasoning, specific, targetDate } = await req.json()
@@ -62,7 +65,7 @@ Example weekly tasks distribution:
 - Thursday (weekday: 4): Recording and evaluation
 [/INST]`
 
-    const output = await replicate.run(
+    const output: ReplicateOutput = await replicate.run(
       "meta/llama-2-70b-chat:02e509c789964a7ea8736978a43525956ef40397be9033abf9fd2badfe68c9e3",
       {
         input: {
@@ -77,7 +80,7 @@ Example weekly tasks distribution:
     let jsonString = '';
     if (Array.isArray(output)) {
       jsonString = output.join('').trim();
-    } else if (typeof output === 'string') {
+    } else if (typeof output === 'string' && output) {  // Check if output is non-null string
       jsonString = output.trim();
     } else {
       throw new Error('Unexpected output format from AI');
