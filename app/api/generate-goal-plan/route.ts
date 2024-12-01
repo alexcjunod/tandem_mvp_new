@@ -6,64 +6,11 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 })
 
-// Update the type to handle all possible outputs
-type ReplicateOutput = unknown;
-
 export async function POST(req: Request) {
   try {
     const { title, reasoning, specific, targetDate } = await req.json()
 
-    const prompt = `[INST] Create a structured SMART goal plan for: "${title}"
-
-Context:
-- User's motivation: ${reasoning}
-- Success criteria: ${specific}
-- Target date: ${targetDate}
-
-Return a valid JSON object with this exact structure (no additional text):
-{
-  "smartGoal": {
-    "specific": "Clear goal statement",
-    "measurable": "How to track progress",
-    "achievable": "Why it's realistic",
-    "relevant": "Connection to motivation",
-    "timeBound": "Timeline with target date"
-  },
-  "milestones": [
-    {
-      "title": "Clear milestone description",
-      "date": "YYYY-MM-DD"
-    }
-  ],
-  "tasks": [
-    {
-      "title": "Daily task description",
-      "type": "daily",
-      "date": "YYYY-MM-DD"
-    },
-    {
-      "title": "Weekly task description",
-      "type": "weekly",
-      "weekday": 0,
-      "date": "YYYY-MM-DD"
-    }
-  ]
-}
-
-Requirements:
-- Include 2-3 daily practice tasks
-- Include at least 5 different weekly tasks spread across different days
-- Each weekly task should be on a different day (weekday: 0-6, where 0 is Sunday)
-- Tasks should build up progressively towards the final goal
-- Task types must be exactly "daily" or "weekly"
-
-Example weekly tasks distribution:
-- Sunday (weekday: 0): Review and planning session
-- Monday (weekday: 1): Technique practice
-- Tuesday (weekday: 2): New material learning
-- Wednesday (weekday: 3): Practice with backing tracks
-- Thursday (weekday: 4): Recording and evaluation
-[/INST]`
+    const prompt = `[INST] Create a structured SMART goal plan for: "${title}"...`
 
     const output = await replicate.run(
       "meta/llama-2-70b-chat:02e509c789964a7ea8736978a43525956ef40397be9033abf9fd2badfe68c9e3",
@@ -78,12 +25,21 @@ Example weekly tasks distribution:
 
     // Parse and clean the response
     let jsonString = '';
-    if (Array.isArray(output)) {
+    
+    // Type guard functions
+    const isStringArray = (value: unknown): value is string[] => 
+      Array.isArray(value) && value.every(item => typeof item === 'string');
+    
+    const isErrorObject = (value: unknown): value is { error: string } =>
+      typeof value === 'object' && value !== null && 'error' in value;
+
+    // Handle different output types
+    if (isStringArray(output)) {
       jsonString = output.join('').trim();
     } else if (typeof output === 'string') {
       jsonString = output.trim();
-    } else if (output && typeof output === 'object' && 'error' in output) {
-      throw new Error((output as { error: string }).error);
+    } else if (isErrorObject(output)) {
+      throw new Error(output.error);
     } else {
       throw new Error('Unexpected output format from AI');
     }
