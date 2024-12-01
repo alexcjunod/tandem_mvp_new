@@ -45,6 +45,18 @@ import { Textarea } from "@/components/ui/textarea"
 
 import type { Goal, Task, Milestone } from "@/types";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+
 const calculateProgress = (goal: Goal) => {
   if (!goal?.milestones || goal.milestones.length === 0) return 0;
   
@@ -69,7 +81,8 @@ export default function GoalDetailsPage() {
     updateGoalMilestone, 
     refreshGoals,
     deleteTask,
-    deleteMilestone 
+    deleteMilestone,
+    deleteGoal
   } = useGoals()
   const [isLoading, setIsLoading] = useState(true)
   const [isEditingDate, setIsEditingDate] = useState(false)
@@ -299,14 +312,10 @@ export default function GoalDetailsPage() {
         completed: !milestone.completed
       });
 
-      if (result) {
-        await refreshGoals();
-
-        if (!milestone.completed) {
-          setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 3000);
-        }
-        toast.success('Milestone updated successfully');
+      if (result && !milestone.completed) {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 3000);
+        toast.success('Milestone completed!');
       }
     } catch (error) {
       console.error('Error toggling milestone:', error);
@@ -375,6 +384,14 @@ export default function GoalDetailsPage() {
     }
   };
 
+  const handleDelete = async () => {
+    const goalId = typeof params.id === 'string' ? params.id : params.id[0];
+    const success = await deleteGoal(goalId);
+    if (success) {
+      router.push('/dashboard');
+    }
+  };
+
   if (isLoading) {
     console.log('Rendering loading state with:', {
       user,
@@ -438,448 +455,475 @@ export default function GoalDetailsPage() {
         Back to Goals
       </Button>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="md:col-span-2">
-          <CardHeader>
-            {isEditingDetails ? (
-              <div className="space-y-4">
-                <Input
-                  value={editedDetails.title}
-                  onChange={(e) => setEditedDetails(prev => ({
-                    ...prev,
-                    title: e.target.value
-                  }))}
-                  placeholder="Goal title"
-                />
-                <Textarea
-                  value={editedDetails.description}
-                  onChange={(e) => setEditedDetails(prev => ({
-                    ...prev,
-                    description: e.target.value
-                  }))}
-                  placeholder="Don&apos;t worry if you&apos;re not sure what to write..."
-                />
-                <div className="flex items-center gap-2">
-                  <Palette className="h-4 w-4" />
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="grid gap-6 md:grid-cols-3">
+          <Card className="md:col-span-2">
+            <CardHeader>
+              {isEditingDetails ? (
+                <div className="space-y-4">
                   <Input
-                    type="color"
-                    value={editedDetails.color}
+                    value={editedDetails.title}
                     onChange={(e) => setEditedDetails(prev => ({
                       ...prev,
-                      color: e.target.value
+                      title: e.target.value
                     }))}
-                    className="w-20 h-8 p-1"
+                    placeholder="Goal title"
                   />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button onClick={handleDetailsUpdate}>Save</Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsEditingDetails(false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between items-start">
-                  <CardTitle className="text-3xl font-bold flex items-center gap-2">
-                    <Target className="h-8 w-8" style={{ color: currentGoal.color || 'currentColor' }} />
-                    {currentGoal.title}
-                  </CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsEditingDetails(true)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                </div>
-                <CardDescription>{currentGoal.description}</CardDescription>
-              </>
-            )}
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {/* Date Section */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  <span className="text-sm">
-                    Start: {format(new Date(currentGoal.start_date), 'MMM d, yyyy')}
-                  </span>
-                </div>
-                <div className="flex items-center">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  {isEditingDate ? (
+                  <Textarea
+                    value={editedDetails.description}
+                    onChange={(e) => setEditedDetails(prev => ({
+                      ...prev,
+                      description: e.target.value
+                    }))}
+                    placeholder="Don't worry if you're not sure what to write..."
+                  />
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <input
-                        type="date"
-                        value={editedEndDate}
-                        onChange={(e) => setEditedEndDate(e.target.value)}
-                        className="text-sm p-1 border rounded"
+                      <Palette className="h-4 w-4" />
+                      <Input
+                        type="color"
+                        value={editedDetails.color}
+                        onChange={(e) => setEditedDetails(prev => ({
+                          ...prev,
+                          color: e.target.value
+                        }))}
+                        className="w-20 h-8 p-1"
                       />
-                      <Button size="sm" onClick={handleEndDateUpdate}>
-                        Save
-                      </Button>
+                    </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm">
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Goal
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Goal</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete this goal? This action cannot be undone.
+                            All associated tasks and milestones will also be deleted.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button onClick={handleDetailsUpdate}>Save</Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsEditingDetails(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-3xl font-bold flex items-center gap-2">
+                      <Target className="h-8 w-8" style={{ color: currentGoal.color || 'currentColor' }} />
+                      {currentGoal.title}
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsEditingDetails(true)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <CardDescription>{currentGoal.description}</CardDescription>
+                </>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Date Section */}
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center">
+                    <Calendar className="mr-2 h-4 w-4" />
+                    <span className="text-sm">
+                      Start: {format(new Date(currentGoal.start_date), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {isEditingDate ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="date"
+                          value={editedEndDate}
+                          onChange={(e) => setEditedEndDate(e.target.value)}
+                          className="text-sm p-1 border rounded"
+                        />
+                        <Button size="sm" onClick={handleEndDateUpdate}>
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setIsEditingDate(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">
+                          End: {format(new Date(currentGoal.end_date), 'MMM d, yyyy')}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setIsEditingDate(true)}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* SMART Goal Section */}
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold">SMART Goal</h3>
+                    {!isEditingSmart && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setIsEditingDate(false)}
+                        onClick={() => setIsEditingSmart(true)}
                       >
-                        Cancel
+                        <Pencil className="h-3 w-3 mr-2" />
+                        Edit
                       </Button>
+                    )}
+                  </div>
+                  {isEditingSmart ? (
+                    <div className="space-y-4">
+                      <div>
+                        <Badge variant="outline" className="mb-2">Specific</Badge>
+                        <Input
+                          value={editedSmartGoal.specific}
+                          onChange={(e) => setEditedSmartGoal(prev => ({
+                            ...prev,
+                            specific: e.target.value
+                          }))}
+                        />
+                      </div>
+                      <div>
+                        <Badge variant="outline" className="mb-2">Measurable</Badge>
+                        <Input
+                          value={editedSmartGoal.measurable}
+                          onChange={(e) => setEditedSmartGoal(prev => ({
+                            ...prev,
+                            measurable: e.target.value
+                          }))}
+                        />
+                      </div>
+                      <div>
+                        <Badge variant="outline" className="mb-2">Achievable</Badge>
+                        <Input
+                          value={editedSmartGoal.achievable}
+                          onChange={(e) => setEditedSmartGoal(prev => ({
+                            ...prev,
+                            achievable: e.target.value
+                          }))}
+                        />
+                      </div>
+                      <div>
+                        <Badge variant="outline" className="mb-2">Relevant</Badge>
+                        <Input
+                          value={editedSmartGoal.relevant}
+                          onChange={(e) => setEditedSmartGoal(prev => ({
+                            ...prev,
+                            relevant: e.target.value
+                          }))}
+                        />
+                      </div>
+                      <div>
+                        <Badge variant="outline" className="mb-2">Time-bound</Badge>
+                        <Input
+                          value={editedSmartGoal.timeBound}
+                          onChange={(e) => setEditedSmartGoal(prev => ({
+                            ...prev,
+                            timeBound: e.target.value
+                          }))}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button onClick={handleSmartGoalUpdate}>Save</Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setIsEditingSmart(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">
-                        End: {format(new Date(currentGoal.end_date), 'MMM d, yyyy')}
-                      </span>
-                      <Button
-                        size="sm"
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Badge variant="outline" className="mb-2">Specific</Badge>
+                        <p className="text-sm">{currentGoal.smart_goal.specific}</p>
+                      </div>
+                      <div>
+                        <Badge variant="outline" className="mb-2">Measurable</Badge>
+                        <p className="text-sm">{currentGoal.smart_goal.measurable}</p>
+                      </div>
+                      <div>
+                        <Badge variant="outline" className="mb-2">Achievable</Badge>
+                        <p className="text-sm">{currentGoal.smart_goal.achievable}</p>
+                      </div>
+                      <div>
+                        <Badge variant="outline" className="mb-2">Relevant</Badge>
+                        <p className="text-sm">{currentGoal.smart_goal.relevant}</p>
+                      </div>
+                      <div>
+                        <Badge variant="outline" className="mb-2">Time-bound</Badge>
+                        <p className="text-sm">{currentGoal.smart_goal.timeBound}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tasks Section */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-semibold">Tasks</h3>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
                         variant="ghost"
-                        onClick={() => setIsEditingDate(true)}
+                        onClick={() => setShowAllTasks(!showAllTasks)}
                       >
-                        <Pencil className="h-3 w-3" />
+                        {showAllTasks ? 'Show Less' : `Show All (${currentGoal.tasks?.length || 0})`}
                       </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* SMART Goal Section */}
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-semibold">SMART Goal</h3>
-                  {!isEditingSmart && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setIsEditingSmart(true)}
-                    >
-                      <Pencil className="h-3 w-3 mr-2" />
-                      Edit
-                    </Button>
-                  )}
-                </div>
-                {isEditingSmart ? (
-                  <div className="space-y-4">
-                    <div>
-                      <Badge variant="outline" className="mb-2">Specific</Badge>
-                      <Input
-                        value={editedSmartGoal.specific}
-                        onChange={(e) => setEditedSmartGoal(prev => ({
-                          ...prev,
-                          specific: e.target.value
-                        }))}
-                      />
-                    </div>
-                    <div>
-                      <Badge variant="outline" className="mb-2">Measurable</Badge>
-                      <Input
-                        value={editedSmartGoal.measurable}
-                        onChange={(e) => setEditedSmartGoal(prev => ({
-                          ...prev,
-                          measurable: e.target.value
-                        }))}
-                      />
-                    </div>
-                    <div>
-                      <Badge variant="outline" className="mb-2">Achievable</Badge>
-                      <Input
-                        value={editedSmartGoal.achievable}
-                        onChange={(e) => setEditedSmartGoal(prev => ({
-                          ...prev,
-                          achievable: e.target.value
-                        }))}
-                      />
-                    </div>
-                    <div>
-                      <Badge variant="outline" className="mb-2">Relevant</Badge>
-                      <Input
-                        value={editedSmartGoal.relevant}
-                        onChange={(e) => setEditedSmartGoal(prev => ({
-                          ...prev,
-                          relevant: e.target.value
-                        }))}
-                      />
-                    </div>
-                    <div>
-                      <Badge variant="outline" className="mb-2">Time-bound</Badge>
-                      <Input
-                        value={editedSmartGoal.timeBound}
-                        onChange={(e) => setEditedSmartGoal(prev => ({
-                          ...prev,
-                          timeBound: e.target.value
-                        }))}
-                      />
-                    </div>
-                    <div className="flex justify-end gap-2">
-                      <Button onClick={handleSmartGoalUpdate}>Save</Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsEditingSmart(false)}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Badge variant="outline" className="mb-2">Specific</Badge>
-                      <p className="text-sm">{currentGoal.smart_goal.specific}</p>
-                    </div>
-                    <div>
-                      <Badge variant="outline" className="mb-2">Measurable</Badge>
-                      <p className="text-sm">{currentGoal.smart_goal.measurable}</p>
-                    </div>
-                    <div>
-                      <Badge variant="outline" className="mb-2">Achievable</Badge>
-                      <p className="text-sm">{currentGoal.smart_goal.achievable}</p>
-                    </div>
-                    <div>
-                      <Badge variant="outline" className="mb-2">Relevant</Badge>
-                      <p className="text-sm">{currentGoal.smart_goal.relevant}</p>
-                    </div>
-                    <div>
-                      <Badge variant="outline" className="mb-2">Time-bound</Badge>
-                      <p className="text-sm">{currentGoal.smart_goal.timeBound}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Tasks Section */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-semibold">Tasks</h3>
-                  <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="ghost"
-                      onClick={() => setShowAllTasks(!showAllTasks)}
-                    >
-                      {showAllTasks ? 'Show Less' : `Show All (${currentGoal.tasks?.length || 0})`}
-                    </Button>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Task
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add New Task</DialogTitle>
-                          <DialogDescription>
-                            Create a new task for {currentGoal.title}
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                          <Input
-                            placeholder="Task title"
-                            value={newTaskTitle}
-                            onChange={(e) => setNewTaskTitle(e.target.value)}
-                          />
-                          <Select
-                            value={newTaskType}
-                            onValueChange={(value: 'daily' | 'weekly') => {
-                              setNewTaskType(value)
-                              if (value === 'daily') setNewTaskWeekday(undefined)
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select task type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="daily">Daily</SelectItem>
-                              <SelectItem value="weekly">Weekly</SelectItem>
-                            </SelectContent>
-                          </Select>
-
-                          {newTaskType === 'weekly' && (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button size="sm" variant="outline">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Task
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Add New Task</DialogTitle>
+                            <DialogDescription>
+                              Create a new task for {currentGoal.title}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="grid gap-4 py-4">
+                            <Input
+                              placeholder="Task title"
+                              value={newTaskTitle}
+                              onChange={(e) => setNewTaskTitle(e.target.value)}
+                            />
                             <Select
-                              value={newTaskWeekday?.toString()}
-                              onValueChange={(value) => setNewTaskWeekday(parseInt(value))}
+                              value={newTaskType}
+                              onValueChange={(value: 'daily' | 'weekly') => {
+                                setNewTaskType(value)
+                                if (value === 'daily') setNewTaskWeekday(undefined)
+                              }}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select day of week" />
+                                <SelectValue placeholder="Select task type" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="0">Sunday</SelectItem>
-                                <SelectItem value="1">Monday</SelectItem>
-                                <SelectItem value="2">Tuesday</SelectItem>
-                                <SelectItem value="3">Wednesday</SelectItem>
-                                <SelectItem value="4">Thursday</SelectItem>
-                                <SelectItem value="5">Friday</SelectItem>
-                                <SelectItem value="6">Saturday</SelectItem>
+                                <SelectItem value="daily">Daily</SelectItem>
+                                <SelectItem value="weekly">Weekly</SelectItem>
                               </SelectContent>
                             </Select>
+
+                            {newTaskType === 'weekly' && (
+                              <Select
+                                value={newTaskWeekday?.toString()}
+                                onValueChange={(value) => setNewTaskWeekday(parseInt(value))}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select day of week" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="0">Sunday</SelectItem>
+                                  <SelectItem value="1">Monday</SelectItem>
+                                  <SelectItem value="2">Tuesday</SelectItem>
+                                  <SelectItem value="3">Wednesday</SelectItem>
+                                  <SelectItem value="4">Thursday</SelectItem>
+                                  <SelectItem value="5">Friday</SelectItem>
+                                  <SelectItem value="6">Saturday</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </div>
+                          <DialogFooter>
+                            <Button onClick={handleAddTask}>Add Task</Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </div>
+                  <div className="space-y-2 mt-4">
+                    {(showAllTasks 
+                      ? currentGoal.tasks 
+                      : currentGoal.tasks?.slice(0, 3)
+                    )?.map((task: Task) => (
+                      <div
+                        key={task.id}
+                        className="flex items-center justify-between p-2 rounded hover:bg-muted group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 
+                            className={`h-4 w-4 ${task.completed ? 'text-green-500' : 'text-gray-300'}`}
+                          />
+                          <span className={task.completed ? 'line-through text-muted-foreground' : ''}>
+                            {task.title}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={BADGE_CLASS}>{task.type}</Badge>
+                          {task.type === 'weekly' && task.weekday !== undefined && (
+                            <Badge variant="secondary" className={BADGE_CLASS}>
+                              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][task.weekday]}
+                            </Badge>
                           )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => handleDeleteTask(task.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
                         </div>
-                        <DialogFooter>
-                          <Button onClick={handleAddTask}>Add Task</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="space-y-2 mt-4">
-                  {(showAllTasks 
-                    ? currentGoal.tasks 
-                    : currentGoal.tasks?.slice(0, 3)
-                  )?.map((task: Task) => (
-                    <div
-                      key={task.id}
-                      className="flex items-center justify-between p-2 rounded hover:bg-muted group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 
-                          className={`h-4 w-4 ${task.completed ? 'text-green-500' : 'text-gray-300'}`}
-                        />
-                        <span className={task.completed ? 'line-through text-muted-foreground' : ''}>
-                          {task.title}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge className={BADGE_CLASS}>{task.type}</Badge>
-                        {task.type === 'weekly' && task.weekday !== undefined && (
-                          <Badge variant="secondary" className={BADGE_CLASS}>
-                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][task.weekday]}
-                          </Badge>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => handleDeleteTask(task.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* Milestones Section */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-semibold">Milestones</h3>
-                  <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="ghost"
-                      onClick={() => setShowAllMilestones(!showAllMilestones)}
-                    >
-                      {showAllMilestones ? 'Show Less' : `Show All (${currentGoal.milestones?.length || 0})`}
-                    </Button>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Milestone
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add New Milestone</DialogTitle>
-                          <DialogDescription>
-                            Create a new milestone for {currentGoal.title}
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                          <Input
-                            placeholder="Milestone title"
-                            value={newMilestoneTitle}
-                            onChange={(e) => setNewMilestoneTitle(e.target.value)}
+                {/* Milestones Section */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-semibold">Milestones</h3>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => setShowAllMilestones(!showAllMilestones)}
+                      >
+                        {showAllMilestones ? 'Show Less' : `Show All (${currentGoal.milestones?.length || 0})`}
+                      </Button>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button size="sm" variant="outline">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Milestone
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Add New Milestone</DialogTitle>
+                            <DialogDescription>
+                              Create a new milestone for {currentGoal.title}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="grid gap-4 py-4">
+                            <Input
+                              placeholder="Milestone title"
+                              value={newMilestoneTitle}
+                              onChange={(e) => setNewMilestoneTitle(e.target.value)}
+                            />
+                            <Input
+                              type="date"
+                              value={newMilestoneDate}
+                              onChange={(e) => setNewMilestoneDate(e.target.value)}
+                            />
+                          </div>
+                          <DialogFooter>
+                            <Button onClick={handleAddMilestone}>Add Milestone</Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </div>
+                  <div className="space-y-2 mt-4">
+                    {(showAllMilestones 
+                      ? currentGoal.milestones 
+                      : currentGoal.milestones?.slice(0, 3)
+                    )?.map((milestone: Milestone) => (
+                      <div
+                        key={milestone.id}
+                        className="flex items-center justify-between p-2 rounded hover:bg-muted group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={milestone.completed}
+                            onCheckedChange={() => handleMilestoneToggle(milestone.id)}
+                            className="cursor-pointer"
                           />
-                          <Input
-                            type="date"
-                            value={newMilestoneDate}
-                            onChange={(e) => setNewMilestoneDate(e.target.value)}
-                          />
+                          <span className={milestone.completed ? 'line-through text-muted-foreground' : ''}>
+                            {milestone.title}
+                          </span>
                         </div>
-                        <DialogFooter>
-                          <Button onClick={handleAddMilestone}>Add Milestone</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">
+                            {format(new Date(milestone.date), 'MMM d, yyyy')}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => handleDeleteMilestone(milestone.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="space-y-2 mt-4">
-                  {(showAllMilestones 
-                    ? currentGoal.milestones 
-                    : currentGoal.milestones?.slice(0, 3)
-                  )?.map((milestone: Milestone) => (
-                    <div
-                      key={milestone.id}
-                      className="flex items-center justify-between p-2 rounded hover:bg-muted group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={milestone.completed}
-                          onCheckedChange={() => handleMilestoneToggle(milestone.id)}
-                          className="cursor-pointer"
-                        />
-                        <span className={milestone.completed ? 'line-through text-muted-foreground' : ''}>
-                          {milestone.title}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">
-                          {format(new Date(milestone.date), 'MMM d, yyyy')}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => handleDeleteMilestone(milestone.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Progress Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Goal Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span>Overall Progress</span>
-                  <span>{calculateProgress(currentGoal)}%</span>
+          {/* Progress Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Goal Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between text-sm mb-2">
+                    <span>Overall Progress</span>
+                    <span>{calculateProgress(currentGoal)}%</span>
+                  </div>
+                  <Progress value={calculateProgress(currentGoal)} />
                 </div>
-                <Progress value={calculateProgress(currentGoal)} />
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Tasks Completed</h4>
+                  <p className="text-2xl font-bold">
+                    {currentGoal.tasks?.filter((t: Task) => t.completed).length} /{' '}
+                    {currentGoal.tasks?.length}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Milestones Achieved</h4>
+                  <p className="text-2xl font-bold">
+                    {currentGoal.milestones?.filter((m: Milestone) => m.completed).length} /{' '}
+                    {currentGoal.milestones?.length}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 className="text-sm font-medium mb-2">Tasks Completed</h4>
-                <p className="text-2xl font-bold">
-                  {currentGoal.tasks?.filter((t: Task) => t.completed).length} /{' '}
-                  {currentGoal.tasks?.length}
-                </p>
-              </div>
-              <div>
-                <h4 className="text-sm font-medium mb-2">Milestones Achieved</h4>
-                <p className="text-2xl font-bold">
-                  {currentGoal.milestones?.filter((m: Milestone) => m.completed).length} /{' '}
-                  {currentGoal.milestones?.length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )

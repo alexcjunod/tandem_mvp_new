@@ -26,12 +26,13 @@ export interface Goal {
 export interface Task {
   id: string
   title: string
-  type: 'daily' | 'weekly' | 'custom'
-  completed: boolean
+  type: 'daily' | 'weekly'
   date: string
-  weekday?: number
-  goal_id?: string
+  goal_id: string
   user_id: string
+  weekday?: number
+  description?: string
+  completed: boolean
 }
 
 export interface Milestone {

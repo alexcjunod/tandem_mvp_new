@@ -6,10 +6,10 @@ interface InputAreaProps {
   value: string
   onChange: (value: string) => void
   onSend: () => void
-  isTyping: boolean
+  disabled?: boolean
 }
 
-export function InputArea({ value, onChange, onSend, isTyping }: InputAreaProps) {
+export function InputArea({ value, onChange, onSend, disabled }: InputAreaProps) {
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
@@ -27,12 +27,12 @@ export function InputArea({ value, onChange, onSend, isTyping }: InputAreaProps)
           onKeyPress={handleKeyPress}
           className="min-h-[44px] flex-1 resize-none"
           rows={1}
-          disabled={isTyping}
+          disabled={disabled}
         />
         <Button 
           size="icon" 
           onClick={onSend}
-          disabled={isTyping || !value.trim()}
+          disabled={disabled || !value.trim()}
         >
           <Send className="h-4 w-4" />
           <span className="sr-only">Send</span>

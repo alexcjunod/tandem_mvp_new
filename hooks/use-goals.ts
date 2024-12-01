@@ -9,19 +9,27 @@ import { debounce } from 'lodash'
 const getRandomColor = () => {
   // Array of pleasant, accessible colors (avoiding black)
   const colors = [
-    'hsl(10, 80%, 60%)',    // Coral Red
-    'hsl(200, 70%, 50%)',   // Blue
-    'hsl(150, 60%, 40%)',   // Green
-    'hsl(280, 60%, 60%)',   // Purple
-    'hsl(40, 90%, 50%)',    // Orange
-    'hsl(170, 70%, 45%)',   // Teal
-    'hsl(320, 70%, 55%)',   // Pink
-    'hsl(60, 80%, 45%)',    // Yellow
-    'hsl(230, 60%, 50%)',   // Indigo
-    'hsl(100, 65%, 45%)',   // Lime
+    '#FF6B6B',    // Coral Red
+    '#4DABF7',    // Blue
+    '#51CF66',    // Green
+    '#BE4BDB',    // Purple
+    '#FFB84D',    // Orange
+    '#20C997',    // Teal
+    '#FF48B0',    // Pink
+    '#FCC419',    // Yellow
+    '#4C6EF5',    // Indigo
+    '#94D82D',    // Lime
   ];
-  return colors[Math.floor(Math.random() * colors.length)];
+  const randomColor = colors[Math.floor(Math.random() * colors.length)];
+  console.log('Generated random color:', randomColor);
+  return randomColor;
 };
+
+interface GoalWithMetadata extends Partial<Goal> {
+  milestones?: Array<Omit<Milestone, 'id' | 'goal_id'>>;
+  tasks?: Array<Omit<Task, 'id' | 'goal_id'>>;
+  user_id: string;
+}
 
 export function useGoals() {
   const { user } = useUser()
@@ -122,30 +130,62 @@ export function useGoals() {
     if (!user) return null
     
     try {
-      // Assign a random color if one isn't provided
-      const goalWithColor = {
+      // Add user_id and ensure color is set
+      const goalWithMetadata: GoalWithMetadata = {
         ...goalData,
         color: goalData.color || getRandomColor(),
         user_id: user.id
       };
 
-      const { data, error } = await supabase
+      console.log('Sending goal data to Supabase:', goalWithMetadata);
+
+      // First create the goal
+      const { data: createdGoal, error: goalError } = await supabase
         .from('goals')
-        .insert([goalWithColor])
+        .insert([goalWithMetadata])
         .select()
-        .single()
+        .single();
 
-      if (error) throw error
+      if (goalError) throw goalError;
 
-      setGoals(prev => [...prev, data])
-      toast.success('Goal created successfully')
-      return data
+      // Then create milestones if any
+      if (goalWithMetadata.milestones?.length) {
+        const milestonesWithGoalId = goalWithMetadata.milestones.map((m) => ({
+          ...m,
+          goal_id: createdGoal.id
+        }));
+
+        const { error: milestonesError } = await supabase
+          .from('milestones')
+          .insert(milestonesWithGoalId);
+
+        if (milestonesError) throw milestonesError;
+      }
+
+      // Then create tasks if any
+      if (goalWithMetadata.tasks?.length) {
+        const tasksWithGoalId = goalWithMetadata.tasks.map((t) => ({
+          ...t,
+          goal_id: createdGoal.id,
+          user_id: user.id
+        }));
+
+        const { error: tasksError } = await supabase
+          .from('tasks')
+          .insert(tasksWithGoalId);
+
+        if (tasksError) throw tasksError;
+      }
+
+      setGoals(prev => [...prev, createdGoal]);
+      toast.success('Goal created successfully');
+      return createdGoal;
     } catch (err) {
-      console.error('Error creating goal:', err)
-      toast.error('Failed to create goal')
-      return null
+      console.error('Error creating goal:', err);
+      toast.error('Failed to create goal');
+      return null;
     }
-  }
+  };
 
   const updateGoal = async (goalId: string, updates: Partial<Goal>) => {
     try {
@@ -171,23 +211,43 @@ export function useGoals() {
   }
 
   const deleteGoal = async (goalId: string) => {
+    if (!user) return null;
+
     try {
-      const { error } = await supabase
+      // Delete associated tasks first
+      const { error: tasksError } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('goal_id', goalId);
+
+      if (tasksError) throw tasksError;
+
+      // Delete associated milestones
+      const { error: milestonesError } = await supabase
+        .from('milestones')
+        .delete()
+        .eq('goal_id', goalId);
+
+      if (milestonesError) throw milestonesError;
+
+      // Finally delete the goal
+      const { error: goalError } = await supabase
         .from('goals')
         .delete()
-        .eq('id', goalId)
+        .eq('id', goalId);
 
-      if (error) throw error
+      if (goalError) throw goalError;
 
-      setGoals(prev => prev.filter(goal => goal.id !== goalId))
-      toast.success('Goal deleted successfully')
-      return true
+      // Update local state
+      setGoals(prev => prev.filter(g => g.id !== goalId));
+      toast.success('Goal deleted successfully');
+      return true;
     } catch (err) {
-      console.error('Error deleting goal:', err)
-      toast.error('Failed to delete goal')
-      return false
+      console.error('Error deleting goal:', err);
+      toast.error('Failed to delete goal');
+      return false;
     }
-  }
+  };
 
   const updateDailyStats = async (goalId: string) => {
     if (!user) return;
@@ -308,9 +368,26 @@ export function useGoals() {
 
   const updateGoalMilestone = async (milestoneId: string, updates: Partial<Milestone>) => {
     try {
-      console.log('Updating milestone:', { milestoneId, updates });
+      // Find the milestone and its goal
+      const goal = goals.find(g => g.milestones?.some(m => m.id === milestoneId));
+      const milestone = goal?.milestones?.find(m => m.id === milestoneId);
+      
+      if (!milestone) throw new Error('Milestone not found');
 
-      // First update the milestone
+      // Optimistically update local state
+      setGoals(prevGoals => prevGoals.map(g => {
+        if (g.id === goal?.id) {
+          return {
+            ...g,
+            milestones: g.milestones?.map(m => 
+              m.id === milestoneId ? { ...m, ...updates } : m
+            )
+          };
+        }
+        return g;
+      }));
+
+      // Update the milestone in the background
       const { data: milestoneData, error: milestoneError } = await supabase
         .from('milestones')
         .update({ 
@@ -322,49 +399,12 @@ export function useGoals() {
 
       if (milestoneError) throw milestoneError;
 
-      // Find the goal this milestone belongs to
-      const goal = goals.find(g => 
-        g.milestones?.some(m => m.id === milestoneId)
-      );
-
-      if (goal) {
-        // Calculate new progress
-        const updatedMilestones = goal.milestones?.map(m =>
-          m.id === milestoneId ? { ...m, completed: Boolean(updates.completed) } : m
-        );
-        
-        const completedMilestones = updatedMilestones?.filter(m => m.completed).length || 0;
-        const totalMilestones = updatedMilestones?.length || 0;
-        const newProgress = totalMilestones > 0 
-          ? Math.round((completedMilestones / totalMilestones) * 100)
-          : 0;
-
-        // Update the goal's progress
-        const { error: goalError } = await supabase
-          .from('goals')
-          .update({ progress: newProgress })
-          .eq('id', goal.id);
-
-        if (goalError) throw goalError;
-
-        // Update local state
-        setGoals(prevGoals => 
-          prevGoals.map(g => {
-            if (g.id === goal.id) {
-              return {
-                ...g,
-                progress: newProgress,
-                milestones: updatedMilestones
-              };
-            }
-            return g;
-          })
-        );
-      }
-
+      // No need to refresh goals since we've already updated the state
       return milestoneData;
     } catch (err) {
       console.error('Error updating milestone:', err);
+      // Revert optimistic update on error
+      await refreshGoals();
       toast.error('Failed to update milestone');
       return null;
     }

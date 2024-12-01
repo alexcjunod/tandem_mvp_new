@@ -63,8 +63,16 @@ export default function GoalsPage() {
         {goals.map((goal) => (
           <Card key={goal.id} className="hover:shadow-lg transition-shadow">
             <CardHeader>
-              <CardTitle>{goal.title}</CardTitle>
-              <CardDescription>{goal.description}</CardDescription>
+              <div className="flex items-center gap-2">
+                <Target 
+                  className="h-6 w-6" 
+                  style={{ color: goal.color || 'currentColor' }}
+                />
+                <div>
+                  <CardTitle>{goal.title}</CardTitle>
+                  <CardDescription>{goal.description}</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">

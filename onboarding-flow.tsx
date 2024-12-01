@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ArrowRight, Cigarette, Timer, Plus, Target, Send, Sparkles, Check, Trash2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, Cigarette, Timer, Plus, Target, Send, Sparkles, Check, Trash2, Brain } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -13,12 +13,13 @@ import { useUser } from "@clerk/nextjs"
 import { createClient } from '@supabase/supabase-js'
 import { useGoals } from "@/hooks/use-goals"
 import { toast } from "sonner"
-import { Progress } from "@/components/ui/progress"
+import AIChat from "@/components/goals/ai-chat"
+import { Goal } from "@/types/goals"
 
 interface Task {
   title: string
-  type: "daily" | "weekly" | "custom"
-  weekday?: number // 0-6 for Sunday-Saturday
+  type: "daily" | "weekly"
+  weekday?: number // 0-6 for Sunday-Saturday, required for weekly tasks
 }
 
 interface PresetGoal {
@@ -111,7 +112,7 @@ const popularGoals: (PresetGoal | SimpleGoal)[] = [
     ]
   } as PresetGoal,
   { id: "manual", title: "Create Manual Goal", icon: Target },
-  { id: "custom", title: "Create Custom Goal (AI)", icon: Plus }
+  { id: "ai", title: "Create with AI", icon: Brain }
 ]
 
 // Add utility functions
@@ -208,14 +209,15 @@ export default function OnboardingFlow() {
     color: "#000000",
     initialTasks: [{ 
       title: "", 
-      type: "daily"
+      type: "daily",
+      weekday: 0
     }],
     initialMilestones: [{ title: "", date: "" }]
   })
 
   const handleGoalSelect = (goalId: string) => {
     setSelectedGoal(goalId)
-    if (goalId === "custom") {
+    if (goalId === "ai") {
       setStep(3)
     } else if (goalId === "manual") {
       setStep(2)
@@ -295,7 +297,8 @@ export default function OnboardingFlow() {
       ...prev,
       initialTasks: [...prev.initialTasks, { 
         title: "", 
-        type: "daily"
+        type: "daily",
+        weekday: 0
       }]
     }))
   }
@@ -343,27 +346,21 @@ export default function OnboardingFlow() {
         // Create initial tasks
         for (const task of manualGoal.initialTasks) {
           if (task.title.trim()) {
-            let taskDate = new Date()
-            
-            // For weekly tasks, set the correct day of the week
-            if (task.type === 'weekly' && typeof task.weekday === 'number') {
-              // Get the next occurrence of this weekday
-              const currentDay = taskDate.getDay()
-              const daysUntilNext = (task.weekday - currentDay + 7) % 7
-              taskDate.setDate(taskDate.getDate() + daysUntilNext)
-            }
+            const taskData = {
+              title: task.title,
+              type: task.type,
+              completed: false,
+              goal_id: goal.id,
+              user_id: user.id,
+              date: new Date().toISOString().split('T')[0],
+              weekday: task.type === 'weekly' ? (task.weekday ?? 0) : null
+            };
+
+            console.log('Creating task with data:', taskData);
 
             const { error: taskError } = await supabase
               .from('tasks')
-              .insert({
-                title: task.title,
-                type: task.type,
-                completed: false,
-                date: taskDate.toISOString(),
-                weekday: task.type === 'weekly' ? task.weekday : null,
-                goal_id: goal.id,
-                user_id: user.id
-              })
+              .insert(taskData)
 
             if (taskError) {
               console.error('Error creating task:', taskError)
@@ -546,9 +543,31 @@ export default function OnboardingFlow() {
                     <SelectContent>
                       <SelectItem value="daily">Daily</SelectItem>
                       <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="custom">Custom</SelectItem>
                     </SelectContent>
                   </Select>
+                  {task.type === 'weekly' && (
+                    <Select
+                      value={String(task.weekday || 0)}
+                      onValueChange={(value) => {
+                        const newTasks = [...manualGoal.initialTasks]
+                        newTasks[index].weekday = parseInt(value)
+                        setManualGoal(prev => ({ ...prev, initialTasks: newTasks }))
+                      }}
+                    >
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">Sunday</SelectItem>
+                        <SelectItem value="1">Monday</SelectItem>
+                        <SelectItem value="2">Tuesday</SelectItem>
+                        <SelectItem value="3">Wednesday</SelectItem>
+                        <SelectItem value="4">Thursday</SelectItem>
+                        <SelectItem value="5">Friday</SelectItem>
+                        <SelectItem value="6">Saturday</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
@@ -704,7 +723,18 @@ export default function OnboardingFlow() {
           </div>
         )
       case 3:
-        return (
+        return selectedGoal === "ai" ? (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold text-center">Create with AI</h2>
+            <AIChat 
+              onGoalCreated={(goal: Goal) => {
+                if (goal) {
+                  router.push(`/goals/${goal.id}`);
+                }
+              }} 
+            />
+          </div>
+        ) : (
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-center">Create Custom Goal</h2>
             <Card>
@@ -783,22 +813,6 @@ export default function OnboardingFlow() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-2xl p-6">
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setStep((prev) => Math.max(1, prev - 1))}
-              disabled={step === 1}
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span className="sr-only">Back</span>
-            </Button>
-            <div className="font-semibold">Step {step} of 4</div>
-            <div className="w-8 h-8" /> {/* Placeholder for alignment */}
-          </div>
-          <Progress value={(step / 4) * 100} className="w-full" />
-        </div>
         {renderStep()}
       </div>
     </div>
