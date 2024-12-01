@@ -6,8 +6,8 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 })
 
-// Add type for the output
-type ReplicateOutput = string[] | string | null;
+// Update the type to match Replicate's output
+type ReplicateOutput = string | string[] | { error: string };
 
 export async function POST(req: Request) {
   try {
@@ -65,7 +65,7 @@ Example weekly tasks distribution:
 - Thursday (weekday: 4): Recording and evaluation
 [/INST]`
 
-    const output: ReplicateOutput = await replicate.run(
+    const output = await replicate.run(
       "meta/llama-2-70b-chat:02e509c789964a7ea8736978a43525956ef40397be9033abf9fd2badfe68c9e3",
       {
         input: {
@@ -74,14 +74,16 @@ Example weekly tasks distribution:
           temperature: 0.7,
         }
       }
-    )
+    ) as ReplicateOutput;  // Cast the output to our type
 
     // Parse and clean the response
     let jsonString = '';
     if (Array.isArray(output)) {
       jsonString = output.join('').trim();
-    } else if (typeof output === 'string' && output) {  // Check if output is non-null string
+    } else if (typeof output === 'string' && output) {
       jsonString = output.trim();
+    } else if ('error' in output) {
+      throw new Error(output.error);
     } else {
       throw new Error('Unexpected output format from AI');
     }
