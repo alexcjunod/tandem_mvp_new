@@ -6,6 +6,9 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 })
 
+// Add type for the output
+type ReplicateOutput = string[] | string;
+
 export async function POST(req: Request) {
   try {
     const { title, reasoning, specific, targetDate } = await req.json()
@@ -71,7 +74,7 @@ Example weekly tasks distribution:
           temperature: 0.7,
         }
       }
-    )
+    ) as ReplicateOutput;
 
     // Parse and clean the response
     let jsonString = '';
