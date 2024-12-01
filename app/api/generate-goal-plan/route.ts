@@ -6,8 +6,8 @@ const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN,
 })
 
-// Update the type to match Replicate's output
-type ReplicateOutput = string | string[] | { error: string };
+// Update the type to handle all possible outputs
+type ReplicateOutput = unknown;
 
 export async function POST(req: Request) {
   try {
@@ -74,16 +74,16 @@ Example weekly tasks distribution:
           temperature: 0.7,
         }
       }
-    ) as ReplicateOutput;  // Cast the output to our type
+    );
 
     // Parse and clean the response
     let jsonString = '';
     if (Array.isArray(output)) {
       jsonString = output.join('').trim();
-    } else if (typeof output === 'string' && output) {
+    } else if (typeof output === 'string') {
       jsonString = output.trim();
-    } else if ('error' in output) {
-      throw new Error(output.error);
+    } else if (output && typeof output === 'object' && 'error' in output) {
+      throw new Error((output as { error: string }).error);
     } else {
       throw new Error('Unexpected output format from AI');
     }
