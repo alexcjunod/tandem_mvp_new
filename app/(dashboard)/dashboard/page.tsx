@@ -146,8 +146,8 @@ interface TaskItemProps {
   goals: Goal[]
 }
 
-// Add consistent badge width with vertical centering
-const BADGE_CLASS = "min-w-[70px] text-center flex items-center justify-center h-6"
+// Modify the BADGE_CLASS constant at the top of the file
+const BADGE_CLASS = "min-w-[120px] text-center flex items-center justify-center h-6 truncate"
 
 function TaskItem({ task, onToggle, goals }: TaskItemProps) {
   const goal = task.goal_id ? goals.find(g => g.id === task.goal_id) : null;
@@ -178,6 +178,7 @@ function TaskItem({ task, onToggle, goals }: TaskItemProps) {
               borderColor: goal.color,
               color: goal.color
             }}
+            title={goal.title} // Add tooltip for truncated text
           >
             {goal.title}
           </Badge>
@@ -347,27 +348,19 @@ export default function Dashboard() {
   }, [setupSupabase])
 
   // Memoize handlers that use refreshGoals
-  const handleTaskToggle = useMemo(() => async (taskId: string) => {
+  const handleTaskToggle = async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
     try {
-      const task = tasks.find(t => t.id === taskId)
-      if (!task) {
-        console.error('Task not found:', taskId)
-        return
-      }
-
-      const result = await updateGoalTask(taskId, { 
+      await updateGoalTask(taskId, { 
         completed: !task.completed 
-      })
-
-      if (result) {
-        await refreshGoals()
-        toast.success('Task updated successfully')
-      }
+      });
     } catch (error) {
-      console.error('Error toggling task:', error)
-      toast.error("Failed to update task")
+      console.error('Error toggling task:', error);
+      toast.error("Failed to update task");
     }
-  }, [tasks, updateGoalTask, refreshGoals])
+  };
 
   const handleMilestoneToggle = useMemo(() => async (milestoneId: string, goalId?: string) => {
     try {

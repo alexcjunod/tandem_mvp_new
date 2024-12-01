@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useUser } from "@clerk/nextjs"
 import { toast } from 'sonner'
 import { Goal, Task, Milestone, Reflection, Resource } from '@/types'
 import { startOfDay, isAfter, parseISO, format } from 'date-fns'
+import { debounce } from 'lodash'
 
 const getRandomColor = () => {
   // Array of pleasant, accessible colors (avoiding black)
@@ -234,97 +235,74 @@ export function useGoals() {
       const task = tasks.find(t => t.id === taskId);
       if (!task) throw new Error('Task not found');
 
+      // Optimistically update all local state at once
+      const updatedTask = { ...task, ...updates };
+      
+      // Update tasks state
+      const newTasks = tasks.map(t => t.id === taskId ? updatedTask : t);
+      setTasks(newTasks);
+
+      // Update goals state without triggering a re-render for each update
+      const newGoals = goals.map(goal => ({
+        ...goal,
+        tasks: goal.tasks?.map(t => t.id === taskId ? updatedTask : t)
+      }));
+      setGoals(newGoals);
+
+      // Update completions state
+      const completionKey = getTaskCompletionKey(taskId);
+      const newCompletions = {
+        ...taskCompletions,
+        [completionKey]: Boolean(updates.completed)
+      };
+      setTaskCompletions(newCompletions);
+
+      // Handle backend updates silently
       if (task.type === 'daily' || task.type === 'weekly') {
         const now = new Date();
         const localDate = format(now, 'yyyy-MM-dd');
         
-        // First update the task completion in the database
-        const { error: completionError } = await supabase
-          .from('task_completions')
-          .upsert({
-            task_id: taskId,
-            completion_date: localDate,
-            completed: Boolean(updates.completed),
-            user_id: user?.id
-          }, {
-            onConflict: 'task_id,completion_date',
-            ignoreDuplicates: false
-          });
-
-        if (completionError) throw completionError;
-
-        // Update stats if needed
-        if (task.goal_id) {
-          await updateDailyStats(task.goal_id);
-        }
-
-        // Update local state
-        const completionKey = getTaskCompletionKey(taskId);
-        setTaskCompletions(prev => ({
-          ...prev,
-          [completionKey]: Boolean(updates.completed)
-        }));
-
-        // Update tasks state
-        setTasks(prevTasks =>
-          prevTasks.map(t => {
-            if (t.id === taskId) {
-              return { ...t, completed: Boolean(updates.completed) };
-            }
-            return t;
-          })
-        );
-
-        // Update goals state
-        setGoals(prevGoals =>
-          prevGoals.map(goal => ({
-            ...goal,
-            tasks: goal.tasks?.map(t => {
-              if (t.id === taskId) {
-                return { ...t, completed: Boolean(updates.completed) };
-              }
-              return t;
+        // Use a single Promise.all for all backend operations
+        await Promise.all([
+          supabase
+            .from('task_completions')
+            .upsert({
+              task_id: taskId,
+              completion_date: localDate,
+              completed: Boolean(updates.completed),
+              user_id: user?.id
+            }, {
+              onConflict: 'task_id,completion_date',
+              ignoreDuplicates: false
             })
-          }))
-        );
-
-        return true;
+            .then(null, error => {
+              console.error('Task completion update failed:', error);
+              return null;
+            }),
+          task.goal_id 
+            ? updateDailyStats(task.goal_id).catch(error => {
+                console.error('Daily stats update failed:', error);
+                return null;
+              })
+            : Promise.resolve()
+        ]);
       } else {
-        // Keep existing one-time task logic
-        const { error } = await supabase
+        // Handle one-time tasks
+        await supabase
           .from('tasks')
           .update({ completed: Boolean(updates.completed) })
-          .eq('id', taskId);
-
-        if (error) throw error;
-
-        setTasks(prevTasks =>
-          prevTasks.map(t => {
-            if (t.id === taskId) {
-              return { ...t, completed: Boolean(updates.completed) };
-            }
-            return t;
-          })
-        );
-
-        setGoals(prevGoals =>
-          prevGoals.map(goal => ({
-            ...goal,
-            tasks: goal.tasks?.map(t => {
-              if (t.id === taskId) {
-                return { ...t, completed: Boolean(updates.completed) };
-              }
-              return t;
-            })
-          }))
-        );
+          .eq('id', taskId)
+          .then(null, error => {
+            console.error('Task update failed:', error);
+            return null;
+          });
       }
 
       return true;
     } catch (err) {
       console.error('Error updating task:', err);
       toast.error('Failed to update task');
-      return null;
+      return false;
     }
   };
 
