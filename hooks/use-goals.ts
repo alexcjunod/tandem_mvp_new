@@ -25,10 +25,30 @@ const getRandomColor = () => {
   return randomColor;
 };
 
-interface GoalWithMetadata extends Omit<Goal, 'tasks' | 'milestones'> {
+interface GoalWithMetadata {
+  // Required fields
+  id: string;
+  title: string;
+  description: string;
+  progress: number;
+  start_date: string;
+  end_date: string;
+  color: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+
+  // Optional fields
+  smart_goal?: {
+    specific: string;
+    measurable: string;
+    achievable: string;
+    relevant: string;
+    timeBound: string;
+  };
+  reasoning?: string;
   milestones?: Array<Omit<Milestone, 'id' | 'goal_id'>>;
   tasks?: Array<Omit<Task, 'id' | 'goal_id'>>;
-  user_id: string;
 }
 
 export function useGoals() {
@@ -126,62 +146,34 @@ export function useGoals() {
     }
   }, [user, supabase]);
 
-  const createGoal = async (goalData: Partial<Goal>) => {
-    if (!user) return null
-    
+  const createGoal = async (goalData: Partial<GoalWithMetadata>) => {
+    if (!user) return null;
+
     try {
-      // Add user_id and ensure color is set
+      // Add user_id and ensure required fields are set
       const goalWithMetadata: GoalWithMetadata = {
-        ...goalData,
+        id: crypto.randomUUID(), // Generate a new ID
+        title: goalData.title || '',
+        description: goalData.description || '',
+        progress: goalData.progress || 0,
+        start_date: goalData.start_date || new Date().toISOString(),
+        end_date: goalData.end_date || new Date().toISOString(),
         color: goalData.color || getRandomColor(),
-        user_id: user.id
+        user_id: user.id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...goalData
       };
 
-      console.log('Sending goal data to Supabase:', goalWithMetadata);
-
-      // First create the goal
-      const { data: createdGoal, error: goalError } = await supabase
+      const { error } = await supabase
         .from('goals')
-        .insert([goalWithMetadata])
-        .select()
-        .single();
+        .insert([goalWithMetadata]);
 
-      if (goalError) throw goalError;
+      if (error) throw error;
 
-      // Then create milestones if any
-      if (goalWithMetadata.milestones?.length) {
-        const milestonesWithGoalId = goalWithMetadata.milestones.map((m) => ({
-          ...m,
-          goal_id: createdGoal.id
-        }));
-
-        const { error: milestonesError } = await supabase
-          .from('milestones')
-          .insert(milestonesWithGoalId);
-
-        if (milestonesError) throw milestonesError;
-      }
-
-      // Then create tasks if any
-      if (goalWithMetadata.tasks?.length) {
-        const tasksWithGoalId = goalWithMetadata.tasks.map((t) => ({
-          ...t,
-          goal_id: createdGoal.id,
-          user_id: user.id
-        }));
-
-        const { error: tasksError } = await supabase
-          .from('tasks')
-          .insert(tasksWithGoalId);
-
-        if (tasksError) throw tasksError;
-      }
-
-      setGoals(prev => [...prev, createdGoal]);
-      toast.success('Goal created successfully');
-      return createdGoal;
-    } catch (err) {
-      console.error('Error creating goal:', err);
+      return goalWithMetadata;
+    } catch (error) {
+      console.error('Error creating goal:', error);
       toast.error('Failed to create goal');
       return null;
     }
