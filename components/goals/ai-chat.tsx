@@ -387,8 +387,7 @@ export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalPr
       console.error("Error generating plan:", error);
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: "I had trouble creating your plan. Would you like to try selecting a different date?",
-        includeCalendar: true
+        content: "I had trouble creating your plan. Would you like to try selecting a different date?"
       }]);
     } finally {
       setIsThinking(false);
