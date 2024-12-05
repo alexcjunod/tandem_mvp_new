@@ -25,7 +25,7 @@ const getRandomColor = () => {
   return randomColor;
 };
 
-interface GoalWithMetadata extends Partial<Goal> {
+interface GoalWithMetadata extends Omit<Goal, 'tasks' | 'milestones'> {
   milestones?: Array<Omit<Milestone, 'id' | 'goal_id'>>;
   tasks?: Array<Omit<Task, 'id' | 'goal_id'>>;
   user_id: string;
