@@ -1,10 +1,12 @@
 "use client"
 
 import AIChat from "@/components/goals/ai-chat"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 export default function CreateGoalWithAIPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const goalType = searchParams.get('type') || 'default'
 
   return (
     <div className="container mx-auto p-6">
@@ -14,6 +16,7 @@ export default function CreateGoalWithAIPage() {
           Chat with our AI assistant to create a personalized goal plan
         </p>
         <AIChat 
+          goalType={goalType as "marathon" | "quit-smoking" | "default"}
           onGoalCreated={(goal) => {
             router.push(`/goals/${goal.id}`);
           }} 

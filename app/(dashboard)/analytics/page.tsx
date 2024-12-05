@@ -222,6 +222,76 @@ const BarChartComponent = ({ data }: { data: GoalProgressData[] }) => {
   );
 };
 
+// Update the chart section with a simpler progress visualization
+const ProgressChart = ({ goals }: { goals: Goal[] }) => {
+  const data = goals.map(goal => ({
+    name: goal.title,
+    progress: goal.progress || 0,
+    color: goal.color || '#4DABF7'
+  }));
+
+  return (
+    <div className="h-[300px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ top: 20, right: 30, left: 100, bottom: 5 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+          <XAxis type="number" domain={[0, 100]} />
+          <YAxis 
+            type="category" 
+            dataKey="name" 
+            width={90}
+            style={{ fontSize: '12px' }}
+          />
+          <Tooltip
+            content={({ active, payload }) => {
+              if (active && payload && payload.length) {
+                return (
+                  <div className="rounded-lg border bg-background p-2 shadow-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col">
+                        <span className="text-[0.70rem] uppercase text-muted-foreground">
+                          Goal
+                        </span>
+                        <span className="font-bold text-sm">
+                          {payload[0].payload.name}
+                        </span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[0.70rem] uppercase text-muted-foreground">
+                          Progress
+                        </span>
+                        <span className="font-bold text-sm">
+                          {payload[0].value}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            }}
+          />
+          <Bar dataKey="progress" radius={[0, 4, 4, 0]}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.color} />
+            ))}
+            <LabelList 
+              dataKey="progress" 
+              position="right" 
+              formatter={(value: number) => `${value}%`}
+              style={{ fontSize: '12px' }}
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
 export default function AnalyticsPage() {
   const { goals, tasks, isLoading } = useGoals()
   const { user } = useUser()

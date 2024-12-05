@@ -1,19 +1,20 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useGoals } from "@/hooks/use-goals"
 import { MessageList } from "@/components/chat/message-list"
 import { InputArea } from "@/components/chat/input-area"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Loader2, Sparkles } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { Goal } from "@/types/goals"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useUser } from "@clerk/nextjs"
+import { debounce } from "lodash"
 
 interface Message {
   role: "assistant" | "user"
@@ -24,6 +25,7 @@ interface Message {
 
 interface AIGoalProps {
   onGoalCreated: (goal: Goal) => void
+  goalType?: "marathon" | "quit-smoking" | "default"
 }
 
 // Define the chat steps
@@ -115,7 +117,73 @@ const TEST_GOAL_PLAN = {
   ]
 };
 
-export default function AIChat({ onGoalCreated }: AIGoalProps) {
+const TypingAnimation = () => {
+  const [dots, setDots] = useState('');
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots(prev => prev.length >= 3 ? '' : prev + '.');
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex justify-start">
+      <div className="rounded-lg px-6 py-4 bg-secondary space-y-3">
+        <div className="flex items-center gap-2 text-primary">
+          <Sparkles className="h-5 w-5" />
+          <span className="font-medium">AI Assistant is thinking</span>
+          <span>{dots}</span>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Our advanced AI is crafting a personalized SMART goal plan, breaking down your aspirations 
+          into achievable milestones and actionable tasks.
+        </p>
+        <div className="flex justify-center">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Update the initial message when goal type is "quit-smoking"
+const getInitialMessage = (goalType: string) => {
+  switch(goalType) {
+    case "marathon":
+      return {
+        role: "assistant",
+        content: `Let's plan your marathon journey! 🏃‍♂️
+
+💡 Based on Runner's World training plans, we recommend:
+• At least 16 weeks of training
+• Racing in cooler months (Spring/Fall)
+• Targeting a weekend race day
+
+When would you like to achieve this goal?`
+      };
+    case "quit-smoking":
+      return {
+        role: "assistant",
+        content: `Let's create your personalized smoking cessation plan! 🌟
+
+💡 Based on WHO and medical experts' recommendations:
+• A 12-week structured program has the highest success rate
+• Gradual reduction is more successful than cold turkey
+• Combined approach (behavioral support + NRT) doubles success
+• Regular tracking and support improve long-term success
+
+When would you like to start your quit journey?`
+      };
+    default:
+      return {
+        role: "assistant",
+        content: "Hi there! 👋\n\nI'm excited to help you turn your dreams into achievable goals! Let's get started.\n\nWhat's a goal you've been thinking about lately?"
+      };
+  }
+};
+
+export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalProps) {
   const { createGoal } = useGoals()
   const { user } = useUser()
   const supabase = createClientComponentClient()
@@ -126,12 +194,21 @@ export default function AIChat({ onGoalCreated }: AIGoalProps) {
     specific: "",
     targetDate: undefined
   })
-  const [messages, setMessages] = useState<Message[]>([{
-    role: "assistant",
-    content: "Hi there! 👋\n\nI'm excited to help you turn your dreams into achievable goals! Let's get started.\n\nWhat's a goal you've been thinking about lately?"
-  }])
+  const [messages, setMessages] = useState<Message[]>([
+    getInitialMessage(goalType)
+  ])
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isThinking, setIsThinking] = useState(false);
+
+  useEffect(() => {
+    const scrollToBottom = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+    scrollToBottom();
+  }, [messages]);
 
   const handleSend = async () => {
     if (!inputValue.trim()) return
@@ -270,19 +347,16 @@ export default function AIChat({ onGoalCreated }: AIGoalProps) {
   }
 
   const handleDateSelect = async (date: Date | undefined) => {
-    if (!date) return;
-
-    setGoalDetails(prev => ({ ...prev, targetDate: date }));
-    setIsLoading(true);
+    if (!date || isThinking) return;
 
     try {
+      setIsThinking(true);
       const requestBody = {
         title: goalDetails.title,
         reasoning: goalDetails.reasoning,
         specific: goalDetails.specific,
         targetDate: format(date, 'yyyy-MM-dd')
       };
-      console.log('Sending request:', requestBody);
 
       const response = await fetch("/api/generate-goal-plan", {
         method: "POST",
@@ -291,36 +365,128 @@ export default function AIChat({ onGoalCreated }: AIGoalProps) {
       });
 
       const data = await response.json();
-      console.log('Received response:', data);
 
-      if (data.error) {
-        throw new Error(data.error);
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate plan');
       }
 
-      if (!data.plan) {
-        throw new Error('No plan received from API');
+      if (!data.plan || !data.rawPlan) {
+        throw new Error('Invalid response from AI');
       }
 
+      // Only update state if we got a valid response
+      setGoalDetails(prev => ({ ...prev, targetDate: date }));
       setMessages(prev => [...prev, {
         role: "assistant",
         content: data.plan,
         plan: data.rawPlan
       }]);
       setStep("CONFIRM_PLAN");
-    } catch (error: any) {
+
+    } catch (error) {
       console.error("Error generating plan:", error);
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: `I'm sorry, I had trouble creating your plan (${error.message || 'Unknown error'}). Would you like to try again?`
+        content: "I had trouble creating your plan. Would you like to try selecting a different date?",
+        includeCalendar: true
       }]);
     } finally {
-      setIsLoading(false);
+      setIsThinking(false);
     }
   };
 
+  const handleAcceptPlan = async () => {
+    if (!user) return;
+    
+    setIsThinking(true);
+    try {
+      const plan = messages[messages.length - 1].plan as AIResponse;
+      if (!plan || !plan.smartGoal) {
+        throw new Error('Invalid plan data');
+      }
+
+      const now = new Date();
+      
+      // Create the base goal
+      const goalData = {
+        title: goalDetails.title,
+        description: goalDetails.specific,
+        smart_goal: plan.smartGoal,
+        start_date: now.toISOString(),
+        end_date: goalDetails.targetDate?.toISOString() || now.toISOString(),
+        progress: 0,
+        reasoning: goalDetails.reasoning,
+        color: '#4DABF7'
+      };
+
+      const goal = await createGoal(goalData);
+      if (goal) {
+        try {
+          // Create milestones
+          const { error: milestonesError } = await supabase
+            .from('milestones')
+            .insert(plan.milestones.map(m => ({
+              title: m.title,
+              date: m.date,
+              completed: false,
+              goal_id: goal.id
+            })));
+
+          if (milestonesError) throw milestonesError;
+
+          // Create tasks
+          const validTasks = plan.tasks
+            .filter(t => t.type === 'daily' || t.type === 'weekly')
+            .map(t => ({
+              title: t.title,
+              type: t.type as 'daily' | 'weekly',
+              date: now.toISOString(),
+              weekday: t.type === 'weekly' ? t.weekday : undefined,
+              completed: false,
+              goal_id: goal.id,
+              user_id: user.id
+            }));
+
+          if (validTasks.length > 0) {
+            const { error: tasksError } = await supabase
+              .from('tasks')
+              .insert(validTasks);
+
+            if (tasksError) throw tasksError;
+          }
+
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: "✨ Great! I've created your goal with all milestones and tasks. You'll find it in your dashboard!"
+          }]);
+          onGoalCreated(goal);
+
+        } catch (error) {
+          console.error('Error creating milestones/tasks:', error);
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: "I created the goal but had trouble with the milestones and tasks. Would you like to try again?"
+          }]);
+        }
+      }
+    } catch (error) {
+      console.error('Error creating goal:', error);
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "I'm sorry, I had trouble creating your goal. Would you like to try again?"
+      }]);
+    } finally {
+      setIsThinking(false);
+    }
+  };
+
+  const debouncedDateSelect = debounce((date: Date) => {
+    handleDateSelect(date);
+  }, 500); // Wait 500ms after the last change before sending
+
   return (
     <div className="flex flex-col h-[600px]">
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1" ref={scrollAreaRef}>
         <div className="p-4 space-y-4">
           {messages.map((message, index) => (
             <div
@@ -337,39 +503,67 @@ export default function AIChat({ onGoalCreated }: AIGoalProps) {
                 }`}
               >
                 <div className="whitespace-pre-wrap">{message.content}</div>
+                {message.plan && (
+                  <div className="mt-4 space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      I've created a personalized plan based on our conversation. Would you like to proceed with this goal?
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="default"
+                        onClick={handleAcceptPlan}
+                        disabled={isThinking}
+                      >
+                        Accept Plan
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setMessages(prev => [...prev, {
+                            role: "assistant",
+                            content: "What would you like to adjust in the plan?"
+                          }]);
+                        }}
+                        disabled={isThinking}
+                      >
+                        Request Changes
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {message.includeCalendar && (
                   <div className="mt-4">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-[240px] justify-start text-left font-normal",
-                            !goalDetails.targetDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {goalDetails.targetDate ? 
-                            format(goalDetails.targetDate, "PPP") : 
-                            <span>Pick a date</span>
-                          }
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={goalDetails.targetDate}
-                          onSelect={handleDateSelect}
-                          initialFocus
-                          disabled={(date) => date < new Date()}
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <Input
+                      type="date"
+                      min={format(new Date(), 'yyyy-MM-dd')}
+                      max="2030-12-31"
+                      value={goalDetails.targetDate ? format(goalDetails.targetDate, 'yyyy-MM-dd') : ''}
+                      onChange={(e) => {
+                        // Just update the display immediately, don't trigger API call
+                        const date = e.target.value ? new Date(e.target.value) : undefined;
+                        if (date) {
+                          date.setHours(12, 0, 0, 0);
+                          setGoalDetails(prev => ({ ...prev, targetDate: date }));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Only trigger API call when input loses focus
+                        if (!isThinking && e.target.value) {
+                          const date = new Date(e.target.value);
+                          date.setHours(12, 0, 0, 0);
+                          handleDateSelect(date);
+                        }
+                      }}
+                      className="w-[240px]"
+                      disabled={isThinking}
+                    />
                   </div>
                 )}
               </div>
             </div>
           ))}
+          {isThinking && <TypingAnimation />}
+          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
       <div className="p-4 border-t">

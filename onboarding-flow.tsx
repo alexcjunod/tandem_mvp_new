@@ -89,25 +89,30 @@ const popularGoals: (PresetGoal | SimpleGoal)[] = [
   } as PresetGoal,
   { 
     id: "quit-smoking-goal", 
-    title: "Stop Smoking",
+    title: "Quit Smoking for Good",
     icon: Cigarette,
     smart_goal: {
-      specific: "Quit smoking entirely by gradually reducing cigarette use.",
-      measurable: "Track the number of cigarettes smoked daily and aim for zero by the target date.",
-      achievable: "Use nicotine replacement therapy (NRT) and support groups.",
-      relevant: "Improve health, save money, and enhance quality of life.",
-      timeBound: "Quit smoking within 8 weeks."
+      specific: "Quit smoking entirely by using a structured reduction plan and healthy coping strategies.",
+      measurable: "Track daily cigarette consumption and reduce to zero by the target date.",
+      achievable: "Utilize nicotine replacement therapy (NRT), a supportive community, and stress management techniques.",
+      relevant: "Achieving this goal will significantly improve health, save money, and increase energy levels.",
+      timeBound: "Become smoke-free within 8 weeks."
     },
     tasks: [
-      { title: "Track daily cigarette count", type: "daily", weekday: 0 },
-      { title: "Replace one cigarette with NRT daily", type: "daily", weekday: 0 },
-      { title: "Join a support group or app", type: "weekly", weekday: 3 }, // Wednesday
-      { title: "Practice stress management techniques", type: "daily", weekday: 0 }
+      { title: "Track today's cigarette count", type: "daily" },
+      { title: "Replace one cigarette with NRT", type: "daily" },
+      { title: "Write down a positive reason for quitting", type: "daily" },
+      { title: "Practice a 5-minute breathing exercise to manage cravings", type: "daily" },
+      { title: "Read a tip or success story in the support group", type: "daily" },
+      { title: "Join a support group or quit-smoking app", type: "weekly", weekday: 3 },
+      { title: "Identify and prepare for smoking triggers", type: "weekly", weekday: 6 },
+      { title: "Plan a reward for reaching your weekly goal", type: "weekly", weekday: 6 }
     ],
     milestones: [
+      { title: "Reduce smoking by 25%", date: "+7" },
       { title: "Reduce smoking by 50%", date: "+14" },
-      { title: "Switch to NRT for all cravings", date: "+28" },
-      { title: "Smoke-free for 1 week", date: "+49" },
+      { title: "Transition to NRT only", date: "+28" },
+      { title: "Smoke-free for 1 week", date: "+42" },
       { title: "Smoke-free for 1 month", date: "+63" }
     ]
   } as PresetGoal,

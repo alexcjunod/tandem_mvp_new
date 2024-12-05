@@ -79,36 +79,57 @@ Example weekly tasks distribution:
     // Parse and clean the response
     let jsonString = '';
     if (Array.isArray(output)) {
-      jsonString = output.join('').trim();
+      // Join the array and clean up any extra text after the JSON object
+      jsonString = output.join('')
+        .replace(/\n/g, '')  // Remove newlines
+        .match(/\{.*\}/)?.[0] || ''; // Extract just the JSON object
     } else if (typeof output === 'string') {
-      jsonString = output.trim();
+      jsonString = output
+        .replace(/\n/g, '')  // Remove newlines
+        .match(/\{.*\}/)?.[0] || ''; // Extract just the JSON object
     } else {
       throw new Error('Unexpected output format from AI');
     }
 
-    // Extract JSON
-    const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No valid JSON found in response');
+    try {
+      // Clean up common JSON formatting issues
+      jsonString = jsonString
+        .replace(/\}\{/g, '},{')
+        .replace(/\}"/g, '},"')
+        .replace(/\}\]/g, '}]')
+        .replace(/\}\}/g, '}}')
+        .replace(/,,/g, ',');
+
+      const parsedOutput = JSON.parse(jsonString);
+
+      // Validate structure
+      if (!parsedOutput?.smartGoal?.specific) {
+        throw new Error('Missing SMART goal data');
+      }
+      if (!Array.isArray(parsedOutput?.milestones)) {
+        throw new Error('Missing milestones data');
+      }
+      if (!Array.isArray(parsedOutput?.tasks)) {
+        throw new Error('Missing tasks data');
+      }
+
+      return NextResponse.json({ 
+        plan: formatPlan(parsedOutput),
+        rawPlan: parsedOutput
+      });
+    } catch (error) {
+      console.error('JSON parsing error:', error, 'Raw JSON:', jsonString);
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Failed to parse AI response' },
+        { status: 422 }
+      );
     }
-
-    const parsedOutput = JSON.parse(jsonMatch[0]);
-
-    // Validate structure
-    if (!parsedOutput.smartGoal || !parsedOutput.milestones || !parsedOutput.tasks) {
-      throw new Error('Invalid response structure');
-    }
-
-    return NextResponse.json({ 
-      plan: formatPlan(parsedOutput),
-      rawPlan: parsedOutput
-    });
   } catch (error) {
-    console.error("Error:", error)
+    console.error("Error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to generate goal plan" },
       { status: 500 }
-    )
+    );
   }
 }
 
