@@ -402,20 +402,30 @@ export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalPr
         
         setStep("CONFIRM_PLAN");
 
-      } catch (error) {
-        if (error.name === 'AbortError') {
-          // Handle timeout
-          setMessages(prev => prev.slice(0, -1).concat({
-            role: "assistant",
-            content: "The request is taking longer than expected. Please try again.",
-            includeCalendar: true
-          }));
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          if (error.name === 'AbortError') {
+            // Handle timeout
+            setMessages(prev => prev.slice(0, -1).concat({
+              role: "assistant",
+              content: "The request is taking longer than expected. Please try again.",
+              includeCalendar: true
+            }));
+          } else {
+            // Handle other errors
+            console.error("Error generating plan:", error);
+            setMessages(prev => prev.slice(0, -1).concat({
+              role: "assistant",
+              content: `I had trouble creating your plan: ${error.message}. Would you like to try selecting a different date?`,
+              includeCalendar: true
+            }));
+          }
         } else {
-          // Handle other errors
-          console.error("Error generating plan:", error);
+          // Handle non-Error objects
+          console.error("Unknown error generating plan:", error);
           setMessages(prev => prev.slice(0, -1).concat({
             role: "assistant",
-            content: `I had trouble creating your plan: ${error.message}. Would you like to try selecting a different date?`,
+            content: "An unexpected error occurred. Would you like to try selecting a different date?",
             includeCalendar: true
           }));
         }
