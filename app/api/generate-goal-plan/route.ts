@@ -42,7 +42,8 @@ const fixDates = (plan: any, startDate: string) => {
 
 export async function POST(req: Request) {
   try {
-    const { title, reasoning, specific, targetDate } = await req.json()
+    const { title, reasoning, specific, targetDate } = await req.json();
+    console.log('Received request:', { title, reasoning, specific, targetDate });
 
     const prompt = `[INST] Create a structured SMART goal plan for: "${title}"
 
@@ -110,16 +111,18 @@ Example weekly tasks distribution:
     // Parse and clean the response
     let jsonString = '';
     if (Array.isArray(output)) {
-      // Join the array and clean up any extra text after the JSON object
-      jsonString = output.join('')
-        .replace(/\n/g, '')  // Remove newlines
-        .match(/\{.*\}/)?.[0] || ''; // Extract just the JSON object
+      // Join the array and extract just the JSON object
+      const fullText = output.join('');
+      const jsonMatch = fullText.match(/\{[\s\S]*?\}(?=\s*\n\s*This plan)/);
+      jsonString = jsonMatch ? jsonMatch[0] : '';
     } else if (typeof output === 'string') {
-      jsonString = output
-        .replace(/\n/g, '')  // Remove newlines
-        .match(/\{.*\}/)?.[0] || ''; // Extract just the JSON object
-    } else {
-      throw new Error('Unexpected output format from AI');
+      const jsonMatch = output.match(/\{[\s\S]*?\}(?=\s*\n\s*This plan)/);
+      jsonString = jsonMatch ? jsonMatch[0] : '';
+    }
+
+    if (!jsonString) {
+      console.error('No valid JSON found in response:', output);
+      throw new Error('Failed to extract JSON from AI response');
     }
 
     try {
@@ -129,9 +132,14 @@ Example weekly tasks distribution:
         .replace(/\}"/g, '},"')
         .replace(/\}\]/g, '}]')
         .replace(/\}\}/g, '}}')
-        .replace(/,,/g, ',');
+        .replace(/,,/g, ',')
+        .replace(/\n/g, '')
+        .replace(/\r/g, '');
 
+      console.log('Cleaned JSON string:', jsonString);
+      
       const parsedOutput = JSON.parse(jsonString);
+      console.log('Successfully parsed JSON:', parsedOutput);
 
       // Fix any invalid dates in the plan
       const fixedPlan = fixDates(parsedOutput, targetDate);
@@ -152,14 +160,12 @@ Example weekly tasks distribution:
         rawPlan: fixedPlan
       });
     } catch (error) {
-      console.error('JSON parsing error:', error, 'Raw JSON:', jsonString);
-      return NextResponse.json(
-        { error: error instanceof Error ? error.message : 'Failed to parse AI response' },
-        { status: 422 }
-      );
+      console.error('JSON parsing error:', error);
+      console.error('Raw JSON string:', jsonString);
+      throw new Error(`Failed to parse JSON: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error in generate-goal-plan:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to generate goal plan" },
       { status: 500 }
