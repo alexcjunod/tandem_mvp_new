@@ -368,39 +368,58 @@ export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalPr
         content: "I'm crafting your personalized plan based on our conversation. This might take a minute...",
       }]);
 
-      const response = await fetch("/api/generate-goal-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
-      });
+      // Wait for the response with a timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
-      const data = await response.json();
+      try {
+        const response = await fetch("/api/generate-goal-plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate plan');
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to generate plan');
+        }
+
+        const data = await response.json();
+
+        if (!data.plan || !data.rawPlan) {
+          throw new Error('Invalid response from AI');
+        }
+
+        // Replace the loading message with the actual plan
+        setMessages(prev => prev.slice(0, -1).concat({
+          role: "assistant",
+          content: data.plan,
+          plan: data.rawPlan
+        }));
+        
+        setStep("CONFIRM_PLAN");
+
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          // Handle timeout
+          setMessages(prev => prev.slice(0, -1).concat({
+            role: "assistant",
+            content: "The request is taking longer than expected. Please try again.",
+            includeCalendar: true
+          }));
+        } else {
+          // Handle other errors
+          console.error("Error generating plan:", error);
+          setMessages(prev => prev.slice(0, -1).concat({
+            role: "assistant",
+            content: `I had trouble creating your plan: ${error.message}. Would you like to try selecting a different date?`,
+            includeCalendar: true
+          }));
+        }
       }
-
-      if (!data.plan || !data.rawPlan) {
-        throw new Error('Invalid response from AI');
-      }
-
-      // Replace the loading message with the actual plan
-      setMessages(prev => prev.slice(0, -1).concat({
-        role: "assistant",
-        content: data.plan,
-        plan: data.rawPlan
-      }));
-      
-      setStep("CONFIRM_PLAN");
-
-    } catch (error) {
-      console.error("Error generating plan:", error);
-      // Replace the loading message with the error message
-      setMessages(prev => prev.slice(0, -1).concat({
-        role: "assistant",
-        content: "I had trouble creating your plan. Would you like to try selecting a different date?",
-        includeCalendar: true
-      }));
     } finally {
       setIsThinking(false);
     }
@@ -495,6 +514,14 @@ export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalPr
     handleDateSelect(date);
   }, 500); // Wait 500ms after the last change before sending
 
+  // Add a loading animation component
+  const LoadingMessage = () => (
+    <div className="flex items-center gap-2 text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      <span>Generating your personalized plan...</span>
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-[600px]">
       <ScrollArea className="flex-1" ref={scrollAreaRef}>
@@ -513,7 +540,13 @@ export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalPr
                     : "bg-primary text-primary-foreground"
                 }`}
               >
-                <div className="whitespace-pre-wrap">{message.content}</div>
+                <div className="whitespace-pre-wrap">
+                  {message.content === "I'm crafting your personalized plan based on our conversation. This might take a minute..." ? (
+                    <LoadingMessage />
+                  ) : (
+                    message.content
+                  )}
+                </div>
                 {message.plan && (
                   <div className="mt-4 space-y-4">
                     <p className="text-sm text-muted-foreground">
