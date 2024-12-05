@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 "use client"
 
 import { useState, useRef, useEffect } from "react"
@@ -153,9 +154,9 @@ const getInitialMessage = (goalType: string) => {
     case "marathon":
       return {
         role: "assistant",
-        content: `Let's plan your marathon journey! 🏃‍♂️
+        content: `Let&apos;s plan your marathon journey! 🏃‍♂️
 
-💡 Based on Runner's World training plans, we recommend:
+💡 Based on Runner&apos;s World training plans, we recommend:
 • At least 16 weeks of training
 • Racing in cooler months (Spring/Fall)
 • Targeting a weekend race day
@@ -165,9 +166,9 @@ When would you like to achieve this goal?`
     case "quit-smoking":
       return {
         role: "assistant",
-        content: `Let's create your personalized smoking cessation plan! 🌟
+        content: `Let&apos;s create your personalized smoking cessation plan! 🌟
 
-💡 Based on WHO and medical experts' recommendations:
+💡 Based on WHO and medical experts&apos; recommendations:
 • A 12-week structured program has the highest success rate
 • Gradual reduction is more successful than cold turkey
 • Combined approach (behavioral support + NRT) doubles success
@@ -178,7 +179,7 @@ When would you like to start your quit journey?`
     default:
       return {
         role: "assistant",
-        content: "Hi there! 👋\n\nI'm excited to help you turn your dreams into achievable goals! Let's get started.\n\nWhat's a goal you've been thinking about lately?"
+        content: "Hi there! 👋\n\nI&apos;m excited to help you turn your dreams into achievable goals! Let&apos;s get started.\n\nWhat&apos;s a goal you&apos;ve been thinking about lately?"
       };
   }
 };
@@ -318,7 +319,7 @@ export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalPr
 
                 setMessages(prev => [...prev, {
                   role: "assistant",
-                  content: "✨ Great! I've created your goal with all milestones and tasks. You'll find it in your dashboard!"
+                  content: "✨ Great! I&apos;ve created your goal with all milestones and tasks. You&apos;ll find it in your dashboard!"
                 }]);
                 onGoalCreated(goal);
 
@@ -334,7 +335,7 @@ export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalPr
             console.error('Error creating goal:', error);
             setMessages(prev => [...prev, {
               role: "assistant",
-              content: "I'm sorry, I had trouble creating your goal. Would you like to try again?"
+              content: "I&apos;m sorry, I had trouble creating your goal. Would you like to try again?"
             }]);
           } finally {
             setIsLoading(false);
@@ -456,7 +457,7 @@ export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalPr
 
           setMessages(prev => [...prev, {
             role: "assistant",
-            content: "✨ Great! I've created your goal with all milestones and tasks. You'll find it in your dashboard!"
+            content: "✨ Great! I&apos;ve created your goal with all milestones and tasks. You&apos;ll find it in your dashboard!"
           }]);
           onGoalCreated(goal);
 
@@ -472,7 +473,7 @@ export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalPr
       console.error('Error creating goal:', error);
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: "I'm sorry, I had trouble creating your goal. Would you like to try again?"
+        content: "I&apos;m sorry, I had trouble creating your goal. Would you like to try again?"
       }]);
     } finally {
       setIsThinking(false);
