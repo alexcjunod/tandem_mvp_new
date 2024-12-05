@@ -37,15 +37,15 @@ interface GoalWithMetadata {
   user_id: string;
   created_at: string;
   updated_at: string;
-
-  // Optional fields
-  smart_goal?: {
+  smart_goal: {
     specific: string;
     measurable: string;
     achievable: string;
     relevant: string;
     timeBound: string;
   };
+
+  // Optional fields
   reasoning?: string;
   milestones?: Array<Omit<Milestone, 'id' | 'goal_id'>>;
   tasks?: Array<Omit<Task, 'id' | 'goal_id'>>;
@@ -152,7 +152,7 @@ export function useGoals() {
     try {
       // Add user_id and ensure required fields are set
       const goalWithMetadata: GoalWithMetadata = {
-        id: crypto.randomUUID(), // Generate a new ID
+        id: crypto.randomUUID(),
         title: goalData.title || '',
         description: goalData.description || '',
         progress: goalData.progress || 0,
@@ -162,6 +162,13 @@ export function useGoals() {
         user_id: user.id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        smart_goal: goalData.smart_goal || {
+          specific: '',
+          measurable: '',
+          achievable: '',
+          relevant: '',
+          timeBound: ''
+        },
         ...goalData
       };
 
@@ -171,7 +178,7 @@ export function useGoals() {
 
       if (error) throw error;
 
-      return goalWithMetadata;
+      return goalWithMetadata as Goal;
     } catch (error) {
       console.error('Error creating goal:', error);
       toast.error('Failed to create goal');
