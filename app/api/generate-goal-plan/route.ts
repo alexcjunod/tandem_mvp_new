@@ -9,6 +9,37 @@ const replicate = new Replicate({
 // Add type for the output
 type ReplicateOutput = string[] | string;
 
+// Add a function to fix dates in tasks
+const fixDates = (plan: any, startDate: string) => {
+  const start = new Date(startDate);
+  
+  // Fix tasks dates
+  if (plan.tasks) {
+    plan.tasks = plan.tasks.map((task: any) => ({
+      ...task,
+      date: format(start, 'yyyy-MM-dd') // Set all tasks to start date
+    }));
+  }
+
+  // Fix milestone dates if they're invalid
+  if (plan.milestones) {
+    plan.milestones = plan.milestones.map((milestone: any) => {
+      if (milestone.date.includes('YYYY')) {
+        // Generate a date between start and target date
+        const date = new Date(start);
+        date.setDate(date.getDate() + 30); // Add 30 days for each milestone
+        return {
+          ...milestone,
+          date: format(date, 'yyyy-MM-dd')
+        };
+      }
+      return milestone;
+    });
+  }
+
+  return plan;
+};
+
 export async function POST(req: Request) {
   try {
     const { title, reasoning, specific, targetDate } = await req.json()
@@ -102,20 +133,23 @@ Example weekly tasks distribution:
 
       const parsedOutput = JSON.parse(jsonString);
 
+      // Fix any invalid dates in the plan
+      const fixedPlan = fixDates(parsedOutput, targetDate);
+
       // Validate structure
-      if (!parsedOutput?.smartGoal?.specific) {
+      if (!fixedPlan?.smartGoal?.specific) {
         throw new Error('Missing SMART goal data');
       }
-      if (!Array.isArray(parsedOutput?.milestones)) {
+      if (!Array.isArray(fixedPlan?.milestones)) {
         throw new Error('Missing milestones data');
       }
-      if (!Array.isArray(parsedOutput?.tasks)) {
+      if (!Array.isArray(fixedPlan?.tasks)) {
         throw new Error('Missing tasks data');
       }
 
       return NextResponse.json({ 
-        plan: formatPlan(parsedOutput),
-        rawPlan: parsedOutput
+        plan: formatPlan(fixedPlan),
+        rawPlan: fixedPlan
       });
     } catch (error) {
       console.error('JSON parsing error:', error, 'Raw JSON:', jsonString);
