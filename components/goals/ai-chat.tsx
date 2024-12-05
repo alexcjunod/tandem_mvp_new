@@ -359,6 +359,15 @@ export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalPr
         targetDate: format(date, 'yyyy-MM-dd')
       };
 
+      // Update display immediately to show we're processing
+      setGoalDetails(prev => ({ ...prev, targetDate: date }));
+
+      // Add a loading message
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: "I'm crafting your personalized plan based on our conversation. This might take a minute...",
+      }]);
+
       const response = await fetch("/api/generate-goal-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -375,21 +384,23 @@ export default function AIChat({ onGoalCreated, goalType = "default" }: AIGoalPr
         throw new Error('Invalid response from AI');
       }
 
-      // Only update state if we got a valid response
-      setGoalDetails(prev => ({ ...prev, targetDate: date }));
-      setMessages(prev => [...prev, {
+      // Replace the loading message with the actual plan
+      setMessages(prev => prev.slice(0, -1).concat({
         role: "assistant",
         content: data.plan,
         plan: data.rawPlan
-      }]);
+      }));
+      
       setStep("CONFIRM_PLAN");
 
     } catch (error) {
       console.error("Error generating plan:", error);
-      setMessages(prev => [...prev, {
+      // Replace the loading message with the error message
+      setMessages(prev => prev.slice(0, -1).concat({
         role: "assistant",
-        content: "I had trouble creating your plan. Would you like to try selecting a different date?"
-      }]);
+        content: "I had trouble creating your plan. Would you like to try selecting a different date?",
+        includeCalendar: true
+      }));
     } finally {
       setIsThinking(false);
     }
