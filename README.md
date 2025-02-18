@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Tandem - Goal Accountability App
+Tandem is an AI-powered platform designed to help individuals achieve their personal and professional goals through structured goal-setting, progress tracking, and social accountability. This repository contains the Minimum Viable Product (MVP) developed as part of our project at HEC Lausanne - The Faculty of Business and Economics of the University of Lausanne.
 
-## Getting Started
+Features
+AI-Powered SMART Goal Creation: Generate actionable, personalized goal roadmaps.
+Progress Tracking and Analytics: Visual insights on completion rates, milestones, and consistency.
+Community Engagement: Join shared goal groups, participate in discussions, and establish accountability partnerships.
+Gamification and Motivation: Utilize streaks, goal celebrations, and reflections to stay motivated.
+Project Structure
+The repository is organized as follows:
 
-First, run the development server:
+/app: Main application components.
+/components: Reusable UI components.
+/data: Data models and sample datasets.
+/hooks: Custom React hooks.
+/lib: Utility functions and libraries.
+/public: Static assets and images.
+/styles: Global and component-specific styles.
+/pages: Next.js page components.
+Getting Started
+To run this project locally, follow these steps:
 
-```bash
+Clone the repository:
+
+bash
+Copy
+Edit
+git clone https://github.com/alexcjunod/tandem_mvp_new.git
+cd tandem_mvp_new
+Install dependencies:
+
+bash
+Copy
+Edit
+npm install
+Run the development server:
+
+bash
+Copy
+Edit
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+The application should now be running on http://localhost:3000.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Deployment
+This project is configured for deployment on Vercel. For more details on deployment, refer to the Vercel documentation.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Contributing
+We welcome contributions to enhance Tandem. To contribute:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Fork the repository.
+Create a new branch: git checkout -b feature-name.
+Make your changes and commit them: git commit -m 'Add feature'.
+Push to the branch: git push origin feature-name.
+Submit a pull request.
+License
+This project is licensed under the MIT License. See the LICENSE file for details.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
